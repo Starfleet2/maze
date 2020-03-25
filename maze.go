@@ -16,55 +16,55 @@
 package main
 
 import (
-	"os"
-	"fmt"
-	"bufio"
-	"flag"
-	"time"
-	"math"
-	"math/rand"
-	"golang.org/x/crypto/ssh/terminal"
+    "os"
+    "fmt"
+    "bufio"
+    "flag"
+    "time"
+    "math"
+    "math/rand"
+    "golang.org/x/crypto/ssh/terminal"
 )
 
 const (
-	VERSION             = "2.0"
-	UTS_SIGN_ON         = "\n" + "Maze Generation Console Utility "+ VERSION +
+    VERSION             = "2.0"
+    UTS_SIGN_ON         = "\n" + "Maze Generation Console Utility "+ VERSION +
                           "\n" + "Copyright (c) 2016-2020" +
-		                  "\n\n"
+                          "\n\n"
     BLANK_LINE          = "                                                  ";
 
-	MAX_WIDTH           = 300
-	MAX_HEIGHT          = 100
-	MAX_X               = ((MAX_HEIGHT + 1)*2 + 1)
-	MAX_Y               = ((MAX_WIDTH +  1)*2 + 1)
+    MAX_WIDTH           = 300
+    MAX_HEIGHT          = 100
+    MAX_X               = ((MAX_HEIGHT + 1)*2 + 1)
+    MAX_Y               = ((MAX_WIDTH +  1)*2 + 1)
 
-	PATH                = 0
-	WALL                = 1
-	SOLVED              = 2
-	TRIED               = 3
-	CHECK               = 4
+    PATH                = 0
+    WALL                = 1
+    SOLVED              = 2
+    TRIED               = 3
+    CHECK               = 4
 
-	UP                  = 1
-	DOWN                = 2
-	LEFT                = 3
-	RIGHT               = 4
+    UP                  = 1
+    DOWN                = 2
+    LEFT                = 3
+    RIGHT               = 4
 
-	NO_SEARCH           = false
-	SEARCH              = true
+    NO_SEARCH           = false
+    SEARCH              = true
 
-	BLANK               = ' '  // ' '
-	BLOCK               = 0x61 // '#'
-	RIGHT_BOTTOM        = 0x6a // '+'
-	RIGHT_TOP           = 0x6b // '+'
-	LEFT_TOP            = 0x6c // '+'
-	LEFT_BOTTOM         = 0x6d // '+'
-	INTERSECTION        = 0x6e // '+'
-	HORIZONTAL          = 0x71 // '-'
-	RIGHT_TEE           = 0x74 // '+'
-	LEFT_TEE            = 0x75 // '+'
-	UP_TEE              = 0x76 // '+'
-	DOWN_TEE            = 0x77 // '+'
-	VERTICAL            = 0x78 // '|'
+    BLANK               = ' '  // ' '
+    BLOCK               = 0x61 // '#'
+    RIGHT_BOTTOM        = 0x6a // '+'
+    RIGHT_TOP           = 0x6b // '+'
+    LEFT_TOP            = 0x6c // '+'
+    LEFT_BOTTOM         = 0x6d // '+'
+    INTERSECTION        = 0x6e // '+'
+    HORIZONTAL          = 0x71 // '-'
+    RIGHT_TEE           = 0x74 // '+'
+    LEFT_TEE            = 0x75 // '+'
+    UP_TEE              = 0x76 // '+'
+    DOWN_TEE            = 0x77 // '+'
+    VERTICAL            = 0x78 // '|'
 )
 
 type dir_tbl_type struct {
@@ -74,45 +74,45 @@ type dir_tbl_type struct {
 }
 
 var (
-	output_lookup = [16]byte { BLANK     , VERTICAL    , HORIZONTAL, LEFT_BOTTOM ,
-							   VERTICAL  , VERTICAL    , LEFT_TOP  , RIGHT_TEE   ,
-							   HORIZONTAL, RIGHT_BOTTOM, HORIZONTAL, UP_TEE      ,
-							   RIGHT_TOP , LEFT_TEE    , DOWN_TEE  , INTERSECTION }
+    output_lookup = [16]byte { BLANK     , VERTICAL    , HORIZONTAL, LEFT_BOTTOM ,
+                               VERTICAL  , VERTICAL    , LEFT_TOP  , RIGHT_TEE   ,
+                               HORIZONTAL, RIGHT_BOTTOM, HORIZONTAL, UP_TEE      ,
+                               RIGHT_TOP , LEFT_TEE    , DOWN_TEE  , INTERSECTION }
     maze[MAX_X][MAX_Y] byte
-	dir_tbl[4]		   dir_tbl_type
+    dir_tbl[4]         dir_tbl_type
 
-	blank              bool
+    blank              bool
     show               bool
 
-	max_x, max_y       int
-	beg_x, end_x       int
-	beg_y, end_y       int
-	width              int
-	height             int
-	delay              int
-	fps                int
-	min_len            int
-	path_len           int
-	maze_len           int
-	turn_cnt           int
-	solves             int
-	depth              int
-	seed               int
-	path_depth         int
-	num_checks         int
-	max_checks         int
-	num_paths          int
-	num_solves         int
-	num_wall_push      int
-	max_path_length    int
-	num_maze_created   int
+    max_x, max_y       int
+    beg_x, end_x       int
+    beg_y, end_y       int
+    width              int
+    height             int
+    delay              int
+    fps                int
+    min_len            int
+    path_len           int
+    maze_len           int
+    turn_cnt           int
+    solves             int
+    depth              int
+    seed               int
+    path_depth         int
+    num_checks         int
+    max_checks         int
+    num_paths          int
+    num_solves         int
+    num_wall_push      int
+    max_path_length    int
+    num_maze_created   int
 
-	my_stdout          *bufio.Writer
+    my_stdout          *bufio.Writer
 )
 
-func ms_sleep(n int)     	{; time.Sleep(time.Duration(int64(n) * 1000 * 1000)); }
+func ms_sleep(n int)        {; time.Sleep(time.Duration(int64(n) * 1000 * 1000)); }
 
-func bool2int(b bool) int 	{; if b      {; return 1; }; return 0; }
+func bool2int(b bool) int   {; if b      {; return 1; }; return 0; }
 func min(x, y    int) int   {; if x <  y {; return x; }; return y; }
 func max(x, y    int) int   {; if x >  y {; return x; }; return y; }
 func non_zero(x  int) int   {; if x != 0 {; return x; }; return 1; }
@@ -134,11 +134,11 @@ func clr_solved()           {; fmt.Fprintf(my_stdout, "\033[30m\033[0m"  ); my_s
 
 func get_console_size() (int, int) {
     cols, rows, err := terminal.GetSize(0)
-	if err != nil {
-		rows = 24
-		cols = 80
-	}
-	return rows, cols
+    if err != nil {
+        rows = 24
+        cols = 80
+    }
+    return rows, cols
 }
 
 func initialize_maze(x, y *int) {
@@ -153,11 +153,11 @@ func initialize_maze(x, y *int) {
     for i := 0; i < max_x; i++ {; maze[i][0] = PATH; maze[i][2*(width  + 1)] = PATH; }
     for j := 0; j < max_y; j++ {; maze[0][j] = PATH; maze[2*(height + 1)][j] = PATH; }
 
-    *x = 2*((rand.Intn(height)) + 1) 	// random location
-    *y = 2*((rand.Intn(width )) + 1)	// for first path
+    *x = 2*((rand.Intn(height)) + 1)    // random location
+    *y = 2*((rand.Intn(width )) + 1)    // for first path
 
-    beg_x =  2                       	// these will
-    end_x =  2*height                	// never change
+    beg_x =  2                          // these will
+    end_x =  2*height                   // never change
 }
 
 func restore_maze() {
@@ -166,8 +166,8 @@ func restore_maze() {
             if (maze[i][j] == SOLVED ||
                 maze[i][j] == TRIED) {
                 maze[i][j] =  PATH
-			}
-		}
+            }
+        }
     }
 }
 
@@ -178,19 +178,19 @@ func print_maze() {
 
     for i := 1; i < 2 * (height + 1); i++ {
         for j := 1; j < 2 * (width + 1); j++ {
-			var v, s, l, r, w byte
+            var v, s, l, r, w byte
 
-			if is_odd(i) && is_odd(j) {
-				v = output_lookup[1 * bool2int(maze[i-1][j] == WALL && (maze[i-1][j-1] != WALL || maze[i-1][j+1] != WALL)) +	// wall intersection point
-								  2 * bool2int(maze[i][j+1] == WALL && (maze[i-1][j+1] != WALL || maze[i+1][j+1] != WALL)) +	// check that there is a path on the diagonal
-								  4 * bool2int(maze[i+1][j] == WALL && (maze[i+1][j-1] != WALL || maze[i+1][j+1] != WALL)) +
-								  8 * bool2int(maze[i][j-1] == WALL && (maze[i-1][j-1] != WALL || maze[i+1][j-1] != WALL))];
-			} else {
-				v = output_lookup[1 * bool2int(maze[i-1][j] == WALL && (maze[i  ][j-1] != WALL || maze[i  ][j+1] != WALL)) +	// non-intersection point
-								  2 * bool2int(maze[i][j+1] == WALL && (maze[i-1][j  ] != WALL || maze[i+1][j  ] != WALL)) +	// check that there is a path adjacent
-								  4 * bool2int(maze[i+1][j] == WALL && (maze[i  ][j-1] != WALL || maze[i  ][j+1] != WALL)) +
-								  8 * bool2int(maze[i][j-1] == WALL && (maze[i-1][j  ] != WALL || maze[i+1][j  ] != WALL))];
-			}
+            if is_odd(i) && is_odd(j) {
+                v = output_lookup[1 * bool2int(maze[i-1][j] == WALL && (maze[i-1][j-1] != WALL || maze[i-1][j+1] != WALL)) +    // wall intersection point
+                                  2 * bool2int(maze[i][j+1] == WALL && (maze[i-1][j+1] != WALL || maze[i+1][j+1] != WALL)) +    // check that there is a path on the diagonal
+                                  4 * bool2int(maze[i+1][j] == WALL && (maze[i+1][j-1] != WALL || maze[i+1][j+1] != WALL)) +
+                                  8 * bool2int(maze[i][j-1] == WALL && (maze[i-1][j-1] != WALL || maze[i+1][j-1] != WALL))];
+            } else {
+                v = output_lookup[1 * bool2int(maze[i-1][j] == WALL && (maze[i  ][j-1] != WALL || maze[i  ][j+1] != WALL)) +    // non-intersection point
+                                  2 * bool2int(maze[i][j+1] == WALL && (maze[i-1][j  ] != WALL || maze[i+1][j  ] != WALL)) +    // check that there is a path adjacent
+                                  4 * bool2int(maze[i+1][j] == WALL && (maze[i  ][j-1] != WALL || maze[i  ][j+1] != WALL)) +
+                                  8 * bool2int(maze[i][j-1] == WALL && (maze[i-1][j  ] != WALL || maze[i+1][j  ] != WALL))];
+            }
                 s = output_lookup[1 * bool2int(maze[i-1][j] == maze[i][j]) +
                                   2 * bool2int(maze[i][j+1] == maze[i][j]) +
                                   4 * bool2int(maze[i+1][j] == maze[i][j]) +
@@ -199,7 +199,7 @@ func print_maze() {
             if is_even(i) && maze[i][j-1] == SOLVED {; l = HORIZONTAL; } else {; l = BLANK; }
             if is_even(i) && maze[i][j+1] == SOLVED {; r = HORIZONTAL; } else {; r = BLANK; }
 
-			if blank {; w = v; } else {; w = s; }
+            if blank {; w = v; } else {; w = s; }
 
             switch (maze[i][j]) {
                 case WALL  :               putchar( w ); if (is_even(j)) {; putchar( w ); putchar( w ); }
@@ -215,8 +215,8 @@ func print_maze() {
     fmt.Fprintf(my_stdout, "height=%d, width=%d, seed=%d, max_checks=%d, num_wall_push=%d, num_maze_created=%d, num_solves=%d, maze_len=%d, num_paths=%d, avg_path_length=%d, " +      "max_path_length=%d %s\r",
                             height   , width   , seed   , max_checks   , num_wall_push   , num_maze_created   , num_solves   , maze_len   , num_paths   , maze_len/non_zero(num_paths), max_path_length, BLANK_LINE);
     if delay != 0 {
-    	ms_sleep(delay)
-	}
+        ms_sleep(delay)
+    }
 }
 
 func check_directions(x, y int, val byte, depth int, checks *int) bool {
@@ -224,12 +224,12 @@ func check_directions(x, y int, val byte, depth int, checks *int) bool {
 
     if depth != 0 && *checks < 500000 {
         *checks++
-		num_checks++
+        num_checks++
         if max_checks < num_checks {
            max_checks = num_checks
-		}
+        }
                  maze[x    ][y] =  CHECK
-        match = (maze[x - 1][y] == val && maze[x - 2][y] == val && check_directions(x - 2, y, val, depth - 1, checks)) ||	// look left
+        match = (maze[x - 1][y] == val && maze[x - 2][y] == val && check_directions(x - 2, y, val, depth - 1, checks)) ||   // look left
                 (maze[x + 1][y] == val && maze[x + 2][y] == val && check_directions(x + 2, y, val, depth - 1, checks)) ||   // look right
                 (maze[x][y - 1] == val && maze[x][y - 2] == val && check_directions(x, y - 2, val, depth - 1, checks)) ||   // look up
                 (maze[x][y + 1] == val && maze[x][y + 2] == val && check_directions(x, y + 2, val, depth - 1, checks))      // look down
@@ -240,9 +240,9 @@ func check_directions(x, y int, val byte, depth int, checks *int) bool {
 
 func orphan_1x1(x, y int) bool {
     return      x > 1             &&      y > 1             &&  // bounds check
-	       maze[x - 1][y] == WALL && maze[x - 2][y] == PATH &&	// horizontal (look left & right)
+           maze[x - 1][y] == WALL && maze[x - 2][y] == PATH &&  // horizontal (look left & right)
            maze[x + 1][y] == WALL && maze[x + 2][y] == PATH &&
-           maze[x][y - 1] == WALL && maze[x][y - 2] == PATH &&	// vertical   (look up & down)
+           maze[x][y - 1] == WALL && maze[x][y - 2] == PATH &&  // vertical   (look up & down)
            maze[x][y + 1] == WALL && maze[x][y + 2] == PATH
 }
 
@@ -278,29 +278,29 @@ func look(heading, x, y, dx, dy, num int, val byte, depth int) int {
 
 func find_directions(x, y int, val byte, search bool) int {
     num          := 0
-	search_depth := 0
+    search_depth := 0
     num_checks    = 0
     for {
-		if search {
-			search_depth = path_depth
-		}
+        if search {
+            search_depth = path_depth
+        }
         num += look(LEFT , x, y, -2,  0, num, val, search_depth);
         num += look(RIGHT, x, y,  2,  0, num, val, search_depth);
         num += look(UP   , x, y,  0, -2, num, val, search_depth);
         num += look(DOWN , x, y,  0,  2, num, val, search_depth);
 
-		if num != 0 || search == false || path_depth == 0 {
-		   break
-		}
-		path_depth--
+        if num != 0 || search == false || path_depth == 0 {
+           break
+        }
+        path_depth--
     }
     return (num);
 }
 
 func straight_thru(x, y int, val byte) bool {
-    return (maze[x - 1][y] == val && maze[x - 2][y] == val  &&	// horizontal (look left & right)
+    return (maze[x - 1][y] == val && maze[x - 2][y] == val  &&  // horizontal (look left & right)
             maze[x + 1][y] == val && maze[x + 2][y] == val) ||
-           (maze[x][y - 1] == val && maze[x][y - 2] == val  &&	// vertical   (look up & down)
+           (maze[x][y - 1] == val && maze[x][y - 2] == val  &&  // vertical   (look up & down)
             maze[x][y + 1] == val && maze[x][y + 2] == val)
 }
 
@@ -319,10 +319,10 @@ func find_path_start(x, y *int) bool {
                 }
             }
         }
-		if path_depth == 0 {
-		   break
-		}
-		path_depth--
+        if path_depth == 0 {
+           break
+        }
+        path_depth--
     }
     return false
 }
@@ -332,27 +332,27 @@ func mark_cell(x, y int, val byte) {
         maze[x][y]  = val
         if delay != 0 && fps <= 1000 && is_even(x) && is_even(y) {
             print_maze()
-		}
+        }
     }
 }
 
 func carve_path(x, y *int) {
     path_depth = depth
     mark_cell(*x, *y, PATH)
-	for {
-		num := find_directions(*x, *y, WALL, SEARCH)
-		if num == 0 {
-		   break
-		}
+    for {
+        num := find_directions(*x, *y, WALL, SEARCH)
+        if num == 0 {
+           break
+        }
         dir := rand.Intn(num)
         mark_cell(*x +  dir_tbl[dir].x/2, *y +  dir_tbl[dir].y/2, PATH)
         mark_cell(*x +  dir_tbl[dir].x  , *y +  dir_tbl[dir].y  , PATH)
                   *x += dir_tbl[dir].x  ; *y += dir_tbl[dir].y
-		maze_len++
+        maze_len++
     }
     if delay != 0 {
         print_maze()
-	}
+    }
 }
 
 func follow_path(x, y *int) bool {
@@ -466,17 +466,17 @@ func push_mid_wall_openings() int {
         for j := (i & 1) + 1; j < 2 * (width + 1); j += 2 {
             if (mid_wall_opening(i, j)) {
                 mark_cell(i, j, WALL)
-                if is_odd(i) {; mark_cell(i, j + 2, PATH)	// push right
-				} else {;       mark_cell(i + 2, j, PATH)	// push down
-				}
-				moves++
-				num_wall_push++
+                if is_odd(i) {; mark_cell(i, j + 2, PATH)   // push right
+                } else {;       mark_cell(i + 2, j, PATH)   // push down
+                }
+                moves++
+                num_wall_push++
             }
         }
     }
     if delay != 0 {
         print_maze()
-	}
+    }
     return moves
 }
 
@@ -490,52 +490,52 @@ func create_maze(x, y *int) {
         num_paths++
         carve_path(x, y)
 
-		if !find_path_start(x, y) {
-			break;
-		}
+        if !find_path_start(x, y) {
+            break;
+        }
     }
     for ; push_mid_wall_openings() != 0 ; {
-	}
-    delay = 0	// don't print updates while solving for best openings
+    }
+    delay = 0   // don't print updates while solving for best openings
     search_best_openings(x, y)
 }
 
 func main() {
-	flag.Usage = func() {
-		fmt.Printf("%s\nUsage: %s [options]\n%s", UTS_SIGN_ON, flag.Arg(0),
-			 "Options:"                                                                                 + "\n" +
-			 "  -f, --fps     <frames per second>  Set refresh rate           (default: none, instant)" + "\n" +
-			 "  -h, --height  <height>             Set maze height            (default: screen height)" + "\n" +
-			 "  -w, --width   <width>              Set maze width             (default: screen width )" + "\n" +
-			 "  -d, --depth   <depth>              Set path search depth      (default: 1            )" + "\n" +
-			 "  -p, --path    <length>             Set minimum path length    (default: 0            )" + "\n" +
-			 "  -r, --random  <seed>               Set random number seed     (default: current usec )" + "\n" +
-			 "  -s, --show                         Show intermediate results while path length not met" + "\n" +
-			 "  -b, --blank                        Show empty maze as blank vs. lattice work of walls " + "\n\n")
-	}
-	rows, cols   := get_console_size()
-	max_height   := min(MAX_HEIGHT, (rows - 3)/2)
+    flag.Usage = func() {
+        fmt.Printf("%s\nUsage: %s [options]\n%s", UTS_SIGN_ON, flag.Arg(0),
+             "Options:"                                                                                 + "\n" +
+             "  -f, --fps     <frames per second>  Set refresh rate           (default: none, instant)" + "\n" +
+             "  -h, --height  <height>             Set maze height            (default: screen height)" + "\n" +
+             "  -w, --width   <width>              Set maze width             (default: screen width )" + "\n" +
+             "  -d, --depth   <depth>              Set path search depth      (default: 1            )" + "\n" +
+             "  -p, --path    <length>             Set minimum path length    (default: 0            )" + "\n" +
+             "  -r, --random  <seed>               Set random number seed     (default: current usec )" + "\n" +
+             "  -s, --show                         Show intermediate results while path length not met" + "\n" +
+             "  -b, --blank                        Show empty maze as blank vs. lattice work of walls " + "\n\n")
+    }
+    rows, cols   := get_console_size()
+    max_height   := min(MAX_HEIGHT, (rows - 3)/2)
     max_width    := min(MAX_WIDTH , (cols - 1)/4)
-	my_stdout     = bufio.NewWriterSize(os.Stdout, rows*cols)
+    my_stdout     = bufio.NewWriterSize(os.Stdout, rows*cols)
 
-	flag.IntVar( &fps    , "fps"   , 0         , "refresh rate"            );
-	flag.IntVar( &fps    , "f"     , 0         , "refresh rate (shorthand)");
-	flag.IntVar( &height , "height", max_height, "maze height"             );
-	flag.IntVar( &height , "h"     , max_height, "maze height  (shorthand)");
-	flag.IntVar( &width  , "width" , max_width , "maze width"              );
-	flag.IntVar( &width  , "w"     , max_width , "maze width   (shorthand)");
-	flag.IntVar( &depth  , "depth" , 0         , "search depth"            );
-	flag.IntVar( &depth  , "d"     , 0         , "search depth (shorthand)");
-	flag.IntVar( &min_len, "path"  , 0         , "path length"             );
-	flag.IntVar( &min_len, "p"     , 0         , "path length  (shorthand)");
-	flag.IntVar( &seed   , "random", 0         , "random seed"             );
-	flag.IntVar( &seed   , "r"     , 0         , "random seed  (shorthand)");
-	flag.BoolVar(&show   , "show" , true       , "show working"            );
-	flag.BoolVar(&show   , "s"    , true       , "show working (shorthand)");
-	flag.BoolVar(&blank  , "blank", true       , "blank walls"             );
-	flag.BoolVar(&blank  , "b"    , true       , "blank walls  (shorthand)");
+    flag.IntVar( &fps    , "fps"   , 0         , "refresh rate"            );
+    flag.IntVar( &fps    , "f"     , 0         , "refresh rate (shorthand)");
+    flag.IntVar( &height , "height", max_height, "maze height"             );
+    flag.IntVar( &height , "h"     , max_height, "maze height  (shorthand)");
+    flag.IntVar( &width  , "width" , max_width , "maze width"              );
+    flag.IntVar( &width  , "w"     , max_width , "maze width   (shorthand)");
+    flag.IntVar( &depth  , "depth" , 0         , "search depth"            );
+    flag.IntVar( &depth  , "d"     , 0         , "search depth (shorthand)");
+    flag.IntVar( &min_len, "path"  , 0         , "path length"             );
+    flag.IntVar( &min_len, "p"     , 0         , "path length  (shorthand)");
+    flag.IntVar( &seed   , "random", 0         , "random seed"             );
+    flag.IntVar( &seed   , "r"     , 0         , "random seed  (shorthand)");
+    flag.BoolVar(&show   , "show" , true       , "show working"            );
+    flag.BoolVar(&show   , "s"    , true       , "show working (shorthand)");
+    flag.BoolVar(&blank  , "blank", true       , "blank walls"             );
+    flag.BoolVar(&blank  , "b"    , true       , "blank walls  (shorthand)");
 
-	flag.Parse()
+    flag.Parse()
 
     if depth  <  0 || depth  > 100        {; depth  = 100       ;}
     if fps    <  0 || fps    > 100000     {; fps    = 100000    ;}
@@ -544,39 +544,39 @@ func main() {
 
     if min_len <  0 || min_len >= height * width {
        min_len =  0
-	}
+    }
     if min_len == 0 {
        min_len = min((height * width) / 2, int(math.Sqrt(float64(height * width))) * 10)
-	}
+    }
     clr_screen()
     set_cursor_off()
 
     for {
-		switch {
-			case fps ==    0: delay = 0
-		    case fps <= 1000: delay = 1000 / fps
-		    default:          delay = 1000000 / fps
-		}
+        switch {
+            case fps ==    0: delay = 0
+            case fps <= 1000: delay = 1000 / fps
+            default:          delay = 1000000 / fps
+        }
 
-		num_maze_created++
-		if (num_maze_created > 1 || seed == 0) {
+        num_maze_created++
+        if (num_maze_created > 1 || seed == 0) {
             seed = time.Now().Nanosecond()
         }
         rand.Seed(int64(seed));
 
-		var path_start_x int
-     	var path_start_y int
+        var path_start_x int
+        var path_start_y int
 
         create_maze(&path_start_x, &path_start_y); if show {; print_maze(); ms_sleep(1000); }
          solve_maze(&path_start_x, &path_start_y); if show {; print_maze(); ms_sleep(1000); }
 
-		if max_path_length >= min_len {
-		   break
-		}
+        if max_path_length >= min_len {
+           break
+        }
     }
     print_maze()
     set_cursor_on()
     putchar('\n')
-	my_stdout.Flush()
+    my_stdout.Flush()
 }
 

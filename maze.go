@@ -11,7 +11,7 @@
  * Rev 1.4 -- push mid wall openings left and down when done
  * Rev 1.5 -- add recursive, variable depth look ahead
  * Rev 1.6 -- eliminate 1x1 orphans during construction
- * Rev 2.0 -- translated to go
+ * Rev 2.0 -- translated to go (and converted to camelCase)
  */
 package main
 
@@ -27,112 +27,113 @@ import (
 )
 
 const (
-    VERSION             = "2.0"
-    UTS_SIGN_ON         = "\n" + "Maze Generation Console Utility "+ VERSION +
-                          "\n" + "Copyright (c) 2016-2020" +
-                          "\n\n"
-    BLANK_LINE          = "                                                  ";
+    version      = "2.0"
+    utsSignOn    = "\n" + "Maze Generation Console Utility "+ version +
+                   "\n" + "Copyright (c) 2016-2020" +
+                   "\n\n"
+    blankLine    = "                                                  ";
 
-    MAX_WIDTH           = 300
-    MAX_HEIGHT          = 100
-    MAX_X               = ((MAX_HEIGHT + 1)*2 + 1)
-    MAX_Y               = ((MAX_WIDTH +  1)*2 + 1)
+    maxWidth     = 300
+    maxHeight    = 100
+    maxXSize     = ((maxHeight + 1)*2 + 1)
+    maxYSize     = ((maxWidth  + 1)*2 + 1)
 
-    PATH                = 0
-    WALL                = 1
-    SOLVED              = 2
-    TRIED               = 3
-    CHECK               = 4
+    path         = 0
+    wall         = 1
+    solved       = 2
+    tried        = 3
+    check        = 4
 
-    UP                  = 1
-    DOWN                = 2
-    LEFT                = 3
-    RIGHT               = 4
+    up           = 1
+    down         = 2
+    left         = 3
+    right        = 4
 
-    NO_SEARCH           = false
-    SEARCH              = true
+    noSearch     = false
+    search       = true
 
-    BLANK               = ' '  // ' '
-    BLOCK               = 0x61 // '#'
-    RIGHT_BOTTOM        = 0x6a // '+'
-    RIGHT_TOP           = 0x6b // '+'
-    LEFT_TOP            = 0x6c // '+'
-    LEFT_BOTTOM         = 0x6d // '+'
-    INTERSECTION        = 0x6e // '+'
-    HORIZONTAL          = 0x71 // '-'
-    RIGHT_TEE           = 0x74 // '+'
-    LEFT_TEE            = 0x75 // '+'
-    UP_TEE              = 0x76 // '+'
-    DOWN_TEE            = 0x77 // '+'
-    VERTICAL            = 0x78 // '|'
+    blank        = ' '  // ' '
+    block        = 0x61 // '#'
+    rightBottom  = 0x6a // '+'
+    rightTop     = 0x6b // '+'
+    leftTop      = 0x6c // '+'
+    leftBottom   = 0x6d // '+'
+    intersection = 0x6e // '+'
+    horizontal   = 0x71 // '-'
+    rightTee     = 0x74 // '+'
+    leftTee      = 0x75 // '+'
+    upTee        = 0x76 // '+'
+    downTee      = 0x77 // '+'
+    vertical     = 0x78 // '|'
 )
 
-type dir_tbl_type struct {
+type dirTblType struct {
     x       int
     y       int
     heading int
 }
 
 var (
-    output_lookup = [16]byte { BLANK     , VERTICAL    , HORIZONTAL, LEFT_BOTTOM ,
-                               VERTICAL  , VERTICAL    , LEFT_TOP  , RIGHT_TEE   ,
-                               HORIZONTAL, RIGHT_BOTTOM, HORIZONTAL, UP_TEE      ,
-                               RIGHT_TOP , LEFT_TEE    , DOWN_TEE  , INTERSECTION }
-    maze[MAX_X][MAX_Y] byte
-    dir_tbl[4]         dir_tbl_type
+    outputLookup = [16]byte { blank     , vertical   , horizontal, leftBottom  ,
+                              vertical  , vertical   , leftTop   , rightTee    ,
+                              horizontal, rightBottom, horizontal, upTee       ,
+                              rightTop  , leftTee    , downTee   , intersection }
 
-    blank              bool
-    show               bool
+    maze[maxXSize][maxYSize]  byte
+    dirTbl[4]                 dirTblType
 
-    max_x, max_y       int
-    beg_x, end_x       int
-    beg_y, end_y       int
-    width              int
-    height             int
-    delay              int
-    fps                int
-    min_len            int
-    path_len           int
-    maze_len           int
-    turn_cnt           int
-    solves             int
-    depth              int
-    seed               int
-    path_depth         int
-    num_checks         int
-    max_checks         int
-    num_paths          int
-    num_solves         int
-    num_wall_push      int
-    max_path_length    int
-    num_maze_created   int
+    blankFlag       bool
+    showFlag        bool
 
-    my_stdout          *bufio.Writer
+    maxX, maxY      int
+    begX, endX      int
+    begY, endY      int
+    width           int
+    height          int
+    delay           int
+    fps             int
+    minLen          int
+    pathLen         int
+    mazeLen         int
+    turnCnt         int
+    solves          int
+    depth           int
+    seed            int
+    pathDepth       int
+    numChecks       int
+    maxChecks       int
+    numPaths        int
+    numSolves       int
+    numWallPush     int
+    maxPathLength   int
+    numMazeCreated  int
+
+    myStdout        *bufio.Writer
 )
 
-func ms_sleep(n int)        {; time.Sleep(time.Duration(int64(n) * 1000 * 1000)); }
+func msSleep(n   int)       {; time.Sleep(time.Duration(int64(n) * 1000 * 1000)); }
 
 func bool2int(b bool) int   {; if b      {; return 1; }; return 0; }
 func min(x, y    int) int   {; if x <  y {; return x; }; return y; }
 func max(x, y    int) int   {; if x >  y {; return x; }; return y; }
-func non_zero(x  int) int   {; if x != 0 {; return x; }; return 1; }
+func nonZero(x   int) int   {; if x != 0 {; return x; }; return 1; }
 
-func is_even(x   int) bool  {; return (x & 1) == 0; }
-func is_odd( x   int) bool  {; return (x & 1) != 0; }
+func isEven(x    int) bool  {; return (x & 1) == 0; }
+func isOdd( x    int) bool  {; return (x & 1) != 0; }
 
-func putchar(c byte)        {; my_stdout.WriteByte(c); }
+func putchar(c byte)        {; myStdout.WriteByte(c); }
 
-func set_position(x, y int) {; fmt.Fprintf(my_stdout, "\033[%d;%dH", x, y); my_stdout.Flush(); }
-func set_line_draw()        {; fmt.Fprintf(my_stdout, "\033(0"           ); my_stdout.Flush(); }
-func clr_line_draw()        {; fmt.Fprintf(my_stdout, "\033(B"           ); my_stdout.Flush(); }
-func set_cursor_off()       {; fmt.Fprintf(my_stdout, "\033[?25l"        ); my_stdout.Flush(); }
-func set_cursor_on()        {; fmt.Fprintf(my_stdout, "\033[?25h"        ); my_stdout.Flush(); }
-func clr_screen()           {; fmt.Fprintf(my_stdout, "\033[2J"          ); my_stdout.Flush(); }
-func set_solved()           {; fmt.Fprintf(my_stdout, "\033[32m\033[1m"  ); my_stdout.Flush(); }
-func clr_solved()           {; fmt.Fprintf(my_stdout, "\033[30m\033[0m"  ); my_stdout.Flush(); }
+func setPosition(x, y int)  {; fmt.Fprintf(myStdout, "\033[%d;%dH", x, y); myStdout.Flush(); }
+func setLineDraw()          {; fmt.Fprintf(myStdout, "\033(0"           ); myStdout.Flush(); }
+func clrLineDraw()          {; fmt.Fprintf(myStdout, "\033(B"           ); myStdout.Flush(); }
+func setCursorOff()         {; fmt.Fprintf(myStdout, "\033[?25l"        ); myStdout.Flush(); }
+func setCursorOn()          {; fmt.Fprintf(myStdout, "\033[?25h"        ); myStdout.Flush(); }
+func clrScreen()            {; fmt.Fprintf(myStdout, "\033[2J"          ); myStdout.Flush(); }
+func setSolved()            {; fmt.Fprintf(myStdout, "\033[32m\033[1m"  ); myStdout.Flush(); }
+func clrSolved()            {; fmt.Fprintf(myStdout, "\033[30m\033[0m"  ); myStdout.Flush(); }
 
 
-func get_console_size() (int, int) {
+func getConsoleSize() (int, int) {
     cols, rows, err := terminal.GetSize(0)
     if err != nil {
         rows = 24
@@ -141,125 +142,124 @@ func get_console_size() (int, int) {
     return rows, cols
 }
 
-func initialize_maze(x, y *int) {
-    max_x = 2*(height + 1) + 1
-    max_y = 2*(width  + 1) + 1
+func initializeMaze(x, y *int) {
+    maxX = 2*(height + 1) + 1
+    maxY = 2*(width  + 1) + 1
 
-    for i := 1; i < max_x - 1; i++ {
-        for j := 1; j < max_y - 1; j++ {
-            maze[i][j] = WALL
+    for i := 1; i < maxX - 1; i++ {
+        for j := 1; j < maxY - 1; j++ {
+            maze[i][j] = wall
         }
     }
-    for i := 0; i < max_x; i++ {; maze[i][0] = PATH; maze[i][2*(width  + 1)] = PATH; }
-    for j := 0; j < max_y; j++ {; maze[0][j] = PATH; maze[2*(height + 1)][j] = PATH; }
+    for i := 0; i < maxX; i++ {; maze[i][0] = path; maze[i][2*(width  + 1)] = path; }
+    for j := 0; j < maxY; j++ {; maze[0][j] = path; maze[2*(height + 1)][j] = path; }
 
-    *x = 2*((rand.Intn(height)) + 1)    // random location
-    *y = 2*((rand.Intn(width )) + 1)    // for first path
+    *x = 2*((rand.Intn(height)) + 1)   // random location
+    *y = 2*((rand.Intn(width )) + 1)   // for first path
 
-    beg_x =  2                          // these will
-    end_x =  2*height                   // never change
+    begX = 2                           // these will
+    endX = 2*height                    // never change
 }
 
-func restore_maze() {
-    for i := 0; i < max_x; i++ {
-        for j := 0; j < max_y; j++ {
-            if (maze[i][j] == SOLVED ||
-                maze[i][j] == TRIED) {
-                maze[i][j] =  PATH
+func restoreMaze()  {
+    for i := 0; i < maxX; i++ {
+        for j := 0; j < maxY; j++ {
+            if (maze[i][j] == solved ||
+                maze[i][j] == tried) {
+                maze[i][j] =  path
             }
         }
     }
 }
 
-
-func print_maze() {
-    set_position(0, 0)
-    set_line_draw()
+func printMaze()  {
+    setPosition(0, 0)
+    setLineDraw()
 
     for i := 1; i < 2 * (height + 1); i++ {
         for j := 1; j < 2 * (width + 1); j++ {
             var v, s, l, r, w byte
 
-            if is_odd(i) && is_odd(j) {
-                v = output_lookup[1 * bool2int(maze[i-1][j] == WALL && (maze[i-1][j-1] != WALL || maze[i-1][j+1] != WALL)) +    // wall intersection point
-                                  2 * bool2int(maze[i][j+1] == WALL && (maze[i-1][j+1] != WALL || maze[i+1][j+1] != WALL)) +    // check that there is a path on the diagonal
-                                  4 * bool2int(maze[i+1][j] == WALL && (maze[i+1][j-1] != WALL || maze[i+1][j+1] != WALL)) +
-                                  8 * bool2int(maze[i][j-1] == WALL && (maze[i-1][j-1] != WALL || maze[i+1][j-1] != WALL))];
+            if isOdd(i) && isOdd(j) {
+                v = outputLookup[1 * bool2int(maze[i-1][j] == wall && (maze[i-1][j-1] != wall || maze[i-1][j+1] != wall)) +    // wall intersection point
+                                 2 * bool2int(maze[i][j+1] == wall && (maze[i-1][j+1] != wall || maze[i+1][j+1] != wall)) +    // check that there is a path on the diagonal
+                                 4 * bool2int(maze[i+1][j] == wall && (maze[i+1][j-1] != wall || maze[i+1][j+1] != wall)) +
+                                 8 * bool2int(maze[i][j-1] == wall && (maze[i-1][j-1] != wall || maze[i+1][j-1] != wall))];
             } else {
-                v = output_lookup[1 * bool2int(maze[i-1][j] == WALL && (maze[i  ][j-1] != WALL || maze[i  ][j+1] != WALL)) +    // non-intersection point
-                                  2 * bool2int(maze[i][j+1] == WALL && (maze[i-1][j  ] != WALL || maze[i+1][j  ] != WALL)) +    // check that there is a path adjacent
-                                  4 * bool2int(maze[i+1][j] == WALL && (maze[i  ][j-1] != WALL || maze[i  ][j+1] != WALL)) +
-                                  8 * bool2int(maze[i][j-1] == WALL && (maze[i-1][j  ] != WALL || maze[i+1][j  ] != WALL))];
+                v = outputLookup[1 * bool2int(maze[i-1][j] == wall && (maze[i  ][j-1] != wall || maze[i  ][j+1] != wall)) +    // non-intersection point
+                                 2 * bool2int(maze[i][j+1] == wall && (maze[i-1][j  ] != wall || maze[i+1][j  ] != wall)) +    // check that there is a path adjacent
+                                 4 * bool2int(maze[i+1][j] == wall && (maze[i  ][j-1] != wall || maze[i  ][j+1] != wall)) +
+                                 8 * bool2int(maze[i][j-1] == wall && (maze[i-1][j  ] != wall || maze[i+1][j  ] != wall))];
             }
-                s = output_lookup[1 * bool2int(maze[i-1][j] == maze[i][j]) +
-                                  2 * bool2int(maze[i][j+1] == maze[i][j]) +
-                                  4 * bool2int(maze[i+1][j] == maze[i][j]) +
-                                  8 * bool2int(maze[i][j-1] == maze[i][j])]
+                s = outputLookup[1 * bool2int(maze[i-1][j] == maze[i][j]) +
+                                 2 * bool2int(maze[i][j+1] == maze[i][j]) +
+                                 4 * bool2int(maze[i+1][j] == maze[i][j]) +
+                                 8 * bool2int(maze[i][j-1] == maze[i][j])]
 
-            if is_even(i) && maze[i][j-1] == SOLVED {; l = HORIZONTAL; } else {; l = BLANK; }
-            if is_even(i) && maze[i][j+1] == SOLVED {; r = HORIZONTAL; } else {; r = BLANK; }
+            if isEven(i) && maze[i][j-1] == solved {; l = horizontal; } else {; l = blank; }
+            if isEven(i) && maze[i][j+1] == solved {; r = horizontal; } else {; r = blank; }
 
-            if blank {; w = v; } else {; w = s; }
+            if blankFlag {; w = v; } else {; w = s; }
 
             switch (maze[i][j]) {
-                case WALL  :               putchar( w ); if (is_even(j)) {; putchar( w ); putchar( w ); }
-                case SOLVED: set_solved(); putchar( l ); if (is_even(j)) {; putchar( s ); putchar( r ); }; clr_solved()
-                case CHECK :               putchar(' '); if (is_even(j)) {; putchar('#'); putchar(' '); }
-                default    :               putchar(' '); if (is_even(j)) {; putchar(' '); putchar(' '); }
+                case wall  :              putchar( w ); if (isEven(j)) {; putchar( w ); putchar( w ); }
+                case solved: setSolved(); putchar( l ); if (isEven(j)) {; putchar( s ); putchar( r ); }; clrSolved()
+                case check :              putchar(' '); if (isEven(j)) {; putchar('#'); putchar(' '); }
+                default    :              putchar(' '); if (isEven(j)) {; putchar(' '); putchar(' '); }
             }
         }
         putchar('\n')
     }
-    clr_line_draw()
+    clrLineDraw()
 
-    fmt.Fprintf(my_stdout, "height=%d, width=%d, seed=%d, max_checks=%d, num_wall_push=%d, num_maze_created=%d, num_solves=%d, maze_len=%d, num_paths=%d, avg_path_length=%d, " +      "max_path_length=%d %s\r",
-                            height   , width   , seed   , max_checks   , num_wall_push   , num_maze_created   , num_solves   , maze_len   , num_paths   , maze_len/non_zero(num_paths), max_path_length, BLANK_LINE);
+    fmt.Fprintf(myStdout, "height=%d, width=%d, seed=%d, max_checks=%d, num_wall_push=%d, num_maze_created=%d, num_solves=%d, maze_len=%d, num_paths=%d, avg_path_length=%d, " +   "max_path_length=%d %s\r",
+                           height   , width   , seed   , maxChecks    , numWallPush     , numMazeCreated     , numSolves    , mazeLen    , numPaths    , mazeLen/nonZero(numPaths), maxPathLength, blankLine);
     if delay != 0 {
-        ms_sleep(delay)
+        msSleep(delay)
     }
 }
 
-func check_directions(x, y int, val byte, depth int, checks *int) bool {
+func checkDirections(x, y int, val byte, depth int, checks *int) bool {
     match := true
 
     if depth != 0 && *checks < 500000 {
         *checks++
-        num_checks++
-        if max_checks < num_checks {
-           max_checks = num_checks
+        numChecks++
+        if maxChecks < numChecks  {
+           maxChecks = numChecks
         }
-                 maze[x    ][y] =  CHECK
-        match = (maze[x - 1][y] == val && maze[x - 2][y] == val && check_directions(x - 2, y, val, depth - 1, checks)) ||   // look left
-                (maze[x + 1][y] == val && maze[x + 2][y] == val && check_directions(x + 2, y, val, depth - 1, checks)) ||   // look right
-                (maze[x][y - 1] == val && maze[x][y - 2] == val && check_directions(x, y - 2, val, depth - 1, checks)) ||   // look up
-                (maze[x][y + 1] == val && maze[x][y + 2] == val && check_directions(x, y + 2, val, depth - 1, checks))      // look down
+                 maze[x    ][y] =  check
+        match = (maze[x - 1][y] == val && maze[x - 2][y] == val && checkDirections(x - 2, y, val, depth - 1, checks)) ||   // look left
+                (maze[x + 1][y] == val && maze[x + 2][y] == val && checkDirections(x + 2, y, val, depth - 1, checks)) ||   // look right
+                (maze[x][y - 1] == val && maze[x][y - 2] == val && checkDirections(x, y - 2, val, depth - 1, checks)) ||   // look up
+                (maze[x][y + 1] == val && maze[x][y + 2] == val && checkDirections(x, y + 2, val, depth - 1, checks))      // look down
                  maze[x][y    ] =  val
     }
     return match
 }
 
-func orphan_1x1(x, y int) bool {
+func orphan1x1(x, y int) bool {
     return      x > 1             &&      y > 1             &&  // bounds check
-           maze[x - 1][y] == WALL && maze[x - 2][y] == PATH &&  // horizontal (look left & right)
-           maze[x + 1][y] == WALL && maze[x + 2][y] == PATH &&
-           maze[x][y - 1] == WALL && maze[x][y - 2] == PATH &&  // vertical   (look up & down)
-           maze[x][y + 1] == WALL && maze[x][y + 2] == PATH
+           maze[x - 1][y] == wall && maze[x - 2][y] == path &&  // horizontal (look left & right)
+           maze[x + 1][y] == wall && maze[x + 2][y] == path &&
+           maze[x][y - 1] == wall && maze[x][y - 2] == path &&  // vertical   (look up & down)
+           maze[x][y + 1] == wall && maze[x][y + 2] == path
 }
 
-func check_orphan(x, y, dx, dy, depth int) bool {
+func checkOrphan(x, y, dx, dy, depth int) bool {
     orphan := false;
 
     if depth != 0 {                                     // this only makes sense when carving paths, not when solving, and only if we haven't exhausted our search depth
-        maze[x + dx/2][y + dy/2] = PATH                 // temporarily set new path
-        maze[x + dx  ][y + dy  ] = PATH
+        maze[x + dx/2][y + dy/2] = path                 // temporarily set new path
+        maze[x + dx  ][y + dy  ] = path
 
-        orphan = orphan_1x1(x + dx - 2, y + dy    ) ||  // check for 1x1 orphans left & right of the new location
-                 orphan_1x1(x + dx + 2, y + dy    ) ||
-                 orphan_1x1(x + dx    , y + dy - 2) ||  // check for 1x1 orphans above & below of the new location
-                 orphan_1x1(x + dx    , y + dy + 2)
+        orphan = orphan1x1(x + dx - 2, y + dy    ) ||   // check for 1x1 orphans left & right of the new location
+                 orphan1x1(x + dx + 2, y + dy    ) ||
+                 orphan1x1(x + dx    , y + dy - 2) ||   // check for 1x1 orphans above & below of the new location
+                 orphan1x1(x + dx    , y + dy + 2)
 
-        maze[x + dx  ][y + dy  ] = WALL                 // restore original walls
-        maze[x + dx/2][y + dy/2] = WALL
+        maze[x + dx  ][y + dy  ] = wall                 // restore original walls
+        maze[x + dx/2][y + dy/2] = wall
     }
     return orphan
 }
@@ -267,160 +267,160 @@ func check_orphan(x, y, dx, dy, depth int) bool {
 func look(heading, x, y, dx, dy, num int, val byte, depth int) int {
     check := 0
     if maze[x + dx/2][y + dy/2] == val &&
-       maze[x + dx  ][y + dy  ] == val && !check_orphan(x, y, dx, dy, depth) && check_directions(x + dx, y + dy, val, depth, &check) {
-        dir_tbl[num].x = dx
-        dir_tbl[num].y = dy
-        dir_tbl[num].heading = heading
+       maze[x + dx  ][y + dy  ] == val && !checkOrphan(x, y, dx, dy, depth) && checkDirections(x + dx, y + dy, val, depth, &check) {
+        dirTbl[num].x = dx
+        dirTbl[num].y = dy
+        dirTbl[num].heading = heading
         return 1
     }
     return 0
 }
 
-func find_directions(x, y int, val byte, search bool) int {
-    num          := 0
-    search_depth := 0
-    num_checks    = 0
+func findDirections(x, y int, val byte, search bool) int {
+    num         := 0
+    searchDepth := 0
+    numChecks    = 0
     for {
         if search {
-            search_depth = path_depth
+            searchDepth = pathDepth
         }
-        num += look(LEFT , x, y, -2,  0, num, val, search_depth);
-        num += look(RIGHT, x, y,  2,  0, num, val, search_depth);
-        num += look(UP   , x, y,  0, -2, num, val, search_depth);
-        num += look(DOWN , x, y,  0,  2, num, val, search_depth);
+        num += look(left , x, y, -2,  0, num, val, searchDepth);
+        num += look(right, x, y,  2,  0, num, val, searchDepth);
+        num += look(up   , x, y,  0, -2, num, val, searchDepth);
+        num += look(down , x, y,  0,  2, num, val, searchDepth);
 
-        if num != 0 || search == false || path_depth == 0 {
+        if num != 0 || search == false || pathDepth == 0 {
            break
         }
-        path_depth--
+        pathDepth--
     }
     return (num);
 }
 
-func straight_thru(x, y int, val byte) bool {
+func straightThru(x, y int, val byte) bool {
     return (maze[x - 1][y] == val && maze[x - 2][y] == val  &&  // horizontal (look left & right)
             maze[x + 1][y] == val && maze[x + 2][y] == val) ||
            (maze[x][y - 1] == val && maze[x][y - 2] == val  &&  // vertical   (look up & down)
             maze[x][y + 1] == val && maze[x][y + 2] == val)
 }
 
-func find_path_start(x, y *int) bool {
-    path_depth = depth;
+func findPathStart(x, y *int) bool {
+    pathDepth = depth;
     for {
-        x_start := rand.Intn(height)
-        y_start := rand.Intn(width )
+        xStart := rand.Intn(height)
+        yStart := rand.Intn(width )
 
         for i := 0; i < height; i++ {
             for j := 0; j < width; j++ {
-                *x = 2*((x_start + i) % height + 1)
-                *y = 2*((y_start + j) % width  + 1)
-                if (maze[*x][*y] == PATH && !straight_thru(*x, *y, PATH) && find_directions(*x, *y, WALL, NO_SEARCH) != 0) {
+                *x = 2*((xStart + i) % height + 1)
+                *y = 2*((yStart + j) % width  + 1)
+                if (maze[*x][*y] == path && !straightThru(*x, *y, path) && findDirections(*x, *y, wall, noSearch) != 0) {
                     return true
                 }
             }
         }
-        if path_depth == 0 {
+        if pathDepth == 0 {
            break
         }
-        path_depth--
+        pathDepth--
     }
     return false
 }
 
-func mark_cell(x, y int, val byte) {
+func markCell(x, y int, val byte) {
     if (maze[x][y] != val) {
         maze[x][y]  = val
-        if delay != 0 && fps <= 1000 && is_even(x) && is_even(y) {
-            print_maze()
+        if delay != 0 && fps <= 1000 && isEven(x) && isEven(y)  {
+            printMaze()
         }
     }
 }
 
-func carve_path(x, y *int) {
-    path_depth = depth
-    mark_cell(*x, *y, PATH)
+func carvePath(x, y *int) {
+    pathDepth = depth
+    markCell(*x, *y, path)
     for {
-        num := find_directions(*x, *y, WALL, SEARCH)
+        num := findDirections(*x, *y, wall, search)
         if num == 0 {
            break
         }
         dir := rand.Intn(num)
-        mark_cell(*x +  dir_tbl[dir].x/2, *y +  dir_tbl[dir].y/2, PATH)
-        mark_cell(*x +  dir_tbl[dir].x  , *y +  dir_tbl[dir].y  , PATH)
-                  *x += dir_tbl[dir].x  ; *y += dir_tbl[dir].y
-        maze_len++
+        markCell(*x +  dirTbl[dir].x/2, *y +  dirTbl[dir].y/2, path)
+        markCell(*x +  dirTbl[dir].x  , *y +  dirTbl[dir].y  , path)
+                 *x += dirTbl[dir].x  ; *y += dirTbl[dir].y
+        mazeLen++
     }
     if delay != 0 {
-        print_maze()
+        printMaze()
     }
 }
 
-func follow_path(x, y *int) bool {
-    last_dir  := 0
-    path_depth = 0
-    mark_cell(*x, *y, SOLVED)
-    for ; beg_x <= *x && *x <= end_x && find_directions(*x, *y, PATH, NO_SEARCH) != 0 ; {
-        mark_cell(*x +  dir_tbl[0].x/2, *y +  dir_tbl[0].y/2, SOLVED)
-        mark_cell(*x +  dir_tbl[0].x  , *y +  dir_tbl[0].y  , SOLVED)
-                  *x += dir_tbl[0].x  ; *y += dir_tbl[0].y
-        path_len++
-        if (last_dir != dir_tbl[0].heading) {
-            last_dir  = dir_tbl[0].heading
-            turn_cnt++
+func followPath(x, y *int) bool {
+    lastDir  := 0
+    pathDepth = 0
+    markCell(*x, *y, solved)
+    for ; begX  <= *x && *x <= endX  && findDirections(*x, *y, path, noSearch)  != 0 ; {
+        markCell(*x +  dirTbl[0].x/2, *y +  dirTbl[0].y/2, solved)
+        markCell(*x +  dirTbl[0].x  , *y +  dirTbl[0].y  , solved)
+                 *x += dirTbl[0].x  ; *y += dirTbl[0].y
+        pathLen++
+        if (lastDir != dirTbl[0].heading)  {
+            lastDir  = dirTbl[0].heading
+            turnCnt++
         }
     }
-    return *x > end_x
+    return *x > endX
 }
 
-func back_track_path(x, y *int) {
-    last_dir  := 0
-    path_depth = 0
-    mark_cell(*x, *y, TRIED)
-    for ; find_directions(*x, *y, PATH, NO_SEARCH) == 0 && find_directions(*x, *y, SOLVED, NO_SEARCH) != 0 ; {
-        mark_cell(*x +  dir_tbl[0].x/2, *y +  dir_tbl[0].y/2, TRIED)
-        mark_cell(*x +  dir_tbl[0].x  , *y +  dir_tbl[0].y  , TRIED)
-                  *x += dir_tbl[0].x  ; *y += dir_tbl[0].y
-        path_len--
-        if (last_dir != dir_tbl[0].heading) {
-            last_dir  = dir_tbl[0].heading;
-            turn_cnt--
+func backTrackPath(x, y *int) {
+    lastDir  := 0
+    pathDepth = 0
+    markCell(*x, *y, tried)
+    for ; findDirections(*x, *y, path, noSearch)  == 0 && findDirections(*x, *y, solved, noSearch)  != 0 ; {
+        markCell(*x +  dirTbl[0].x/2, *y +  dirTbl[0].y/2, tried)
+        markCell(*x +  dirTbl[0].x  , *y +  dirTbl[0].y  , tried)
+                 *x += dirTbl[0].x  ; *y += dirTbl[0].y
+        pathLen--
+        if (lastDir != dirTbl[0].heading)  {
+            lastDir  = dirTbl[0].heading;
+            turnCnt--
         }
     }
 }
 
-func solve_maze(x, y *int) {
-    path_len = 0
-    turn_cnt = 0
+func solveMaze(x, y *int) {
+    pathLen = 0
+    turnCnt = 0
 
-    maze[beg_x - 1][beg_y] = SOLVED
-    for ;  !follow_path(x, y) ; {
-        back_track_path(x, y)
+    maze[begX - 1][begY] = solved
+    for ; !followPath(x, y) ; {
+        backTrackPath(x, y)
     }
-    maze[end_x + 1][end_y] = SOLVED
+    maze[endX + 1][endY] = solved
     solves++
 }
 
-func create_openings(x, y *int) {
-    beg_y = *x
-    end_y = *y
+func createOpenings(x, y *int) {
+    begY = *x
+    endY = *y
 
-    maze[beg_x - 1][beg_y] = PATH
-    maze[end_x + 1][end_y] = PATH
+    maze[begX - 1][begY] = path
+    maze[endX + 1][endY] = path
 
-    *x = beg_x
-    *y = beg_y
+    *x = begX
+    *y = begY
 }
 
-func delete_openings() {
-    maze[beg_x - 1][beg_y] = WALL
-    maze[end_x + 1][end_y] = WALL
+func deleteOpenings()  {
+    maze[begX - 1][begY] = wall
+    maze[endX + 1][endY] = wall
 }
 
-func search_best_openings(x, y *int) {
-    best_path_len := 0
-    best_turn_cnt := 0
-    best_start    := 2
-    best_finish   := 2
+func searchBestOpenings(x, y *int) {
+    bestPathLen := 0
+    bestTurnCnt := 0
+    bestStart   := 2
+    bestFinish  := 2
 
     for i := 0; i < width; i++ {
         for j := 0; j < width; j++ {
@@ -428,81 +428,81 @@ func search_best_openings(x, y *int) {
             finish := 2*(j + 1)
             *x = start
             *y = finish
-            if maze[beg_x][start  - 1] != WALL && maze[beg_x][start  + 1] != WALL {; continue; }
-            if maze[end_x][finish - 1] != WALL && maze[end_x][finish + 1] != WALL {; continue; }
-            create_openings(x, y)
-            solve_maze(x, y)
-            if path_len >  best_path_len ||
-              (path_len == best_path_len &&
-               turn_cnt >  best_turn_cnt) {
-               best_start      = start
-               best_finish     = finish
-               best_turn_cnt   = turn_cnt
-               best_path_len   = path_len
-               max_path_length = path_len
+            if maze[begX][start  - 1] != wall && maze[begX][start  + 1] != wall {; continue; }
+            if maze[endX][finish - 1] != wall && maze[endX][finish + 1] != wall {; continue; }
+            createOpenings(x, y)
+            solveMaze(x, y)
+            if pathLen  >  bestPathLen ||
+              (pathLen  == bestPathLen &&
+               turnCnt  >  bestTurnCnt) {
+               bestStart     = start
+               bestFinish    = finish
+               bestTurnCnt   = turnCnt
+               bestPathLen   = pathLen
+               maxPathLength = pathLen
             }
-            restore_maze()
-            delete_openings()
-            num_solves++
+            restoreMaze()
+            deleteOpenings()
+            numSolves++
         }
     }
-    *x = best_start
-    *y = best_finish
-    create_openings(x, y)
+    *x = bestStart
+    *y = bestFinish
+    createOpenings(x, y)
 }
 
-func mid_wall_opening(x, y int) bool {
-    return maze[x    ][y    ] == PATH &&
-           maze[x - 1][y - 1] != WALL &&
-           maze[x - 1][y + 1] != WALL &&
-           maze[x + 1][y - 1] != WALL &&
-           maze[x + 1][y + 1] != WALL
+func midWallOpening(x, y int) bool {
+    return maze[x    ][y    ] == path &&
+           maze[x - 1][y - 1] != wall &&
+           maze[x - 1][y + 1] != wall &&
+           maze[x + 1][y - 1] != wall &&
+           maze[x + 1][y + 1] != wall
 }
 
-func push_mid_wall_openings() int {
+func pushMidWallOpenings() int {
     moves := 0;
 
     for i := 1; i < 2 * (height + 1); i++ {
         for j := (i & 1) + 1; j < 2 * (width + 1); j += 2 {
-            if (mid_wall_opening(i, j)) {
-                mark_cell(i, j, WALL)
-                if is_odd(i) {; mark_cell(i, j + 2, PATH)   // push right
-                } else {;       mark_cell(i + 2, j, PATH)   // push down
+            if (midWallOpening(i, j)) {
+                markCell(i, j, wall)
+                if isOdd(i) {; markCell(i,  j + 2, path)   // push right
+                } else {;      markCell(i + 2,  j, path)   // push down
                 }
                 moves++
-                num_wall_push++
+                numWallPush++
             }
         }
     }
     if delay != 0 {
-        print_maze()
+        printMaze()
     }
     return moves
 }
 
-func create_maze(x, y *int) {
-    max_checks = 0
-    maze_len   = 0
-    num_paths  = 0
+func createMaze(x, y *int) {
+    maxChecks  = 0
+    mazeLen    = 0
+    numPaths   = 0
 
-    initialize_maze(x, y)
+    initializeMaze(x, y)
     for {
-        num_paths++
-        carve_path(x, y)
+        numPaths++
+        carvePath(x, y)
 
-        if !find_path_start(x, y) {
+        if !findPathStart(x, y) {
             break;
         }
     }
-    for ; push_mid_wall_openings() != 0 ; {
+    for ; pushMidWallOpenings() != 0 ; {
     }
     delay = 0   // don't print updates while solving for best openings
-    search_best_openings(x, y)
+    searchBestOpenings(x, y)
 }
 
 func main() {
     flag.Usage = func() {
-        fmt.Printf("%s\nUsage: %s [options]\n%s", UTS_SIGN_ON, flag.Arg(0),
+        fmt.Printf("%s\nUsage: %s [options]\n%s", utsSignOn, flag.Arg(0),
              "Options:"                                                                                 + "\n" +
              "  -f, --fps     <frames per second>  Set refresh rate           (default: none, instant)" + "\n" +
              "  -h, --height  <height>             Set maze height            (default: screen height)" + "\n" +
@@ -513,43 +513,43 @@ func main() {
              "  -s, --show                         Show intermediate results while path length not met" + "\n" +
              "  -b, --blank                        Show empty maze as blank vs. lattice work of walls " + "\n\n")
     }
-    rows, cols   := get_console_size()
-    max_height   := min(MAX_HEIGHT, (rows - 3)/2)
-    max_width    := min(MAX_WIDTH , (cols - 1)/4)
-    my_stdout     = bufio.NewWriterSize(os.Stdout, rows*cols)
+    rows, cols := getConsoleSize()
+    maxHeight  := min(maxHeight, (rows - 3)/2)
+    maxWidth   := min(maxWidth , (cols - 1)/4)
+    myStdout    = bufio.NewWriterSize(os.Stdout, rows*cols)
 
-    flag.IntVar( &fps    , "fps"   , 0         , "refresh rate"            );
-    flag.IntVar( &fps    , "f"     , 0         , "refresh rate (shorthand)");
-    flag.IntVar( &height , "height", max_height, "maze height"             );
-    flag.IntVar( &height , "h"     , max_height, "maze height  (shorthand)");
-    flag.IntVar( &width  , "width" , max_width , "maze width"              );
-    flag.IntVar( &width  , "w"     , max_width , "maze width   (shorthand)");
-    flag.IntVar( &depth  , "depth" , 0         , "search depth"            );
-    flag.IntVar( &depth  , "d"     , 0         , "search depth (shorthand)");
-    flag.IntVar( &min_len, "path"  , 0         , "path length"             );
-    flag.IntVar( &min_len, "p"     , 0         , "path length  (shorthand)");
-    flag.IntVar( &seed   , "random", 0         , "random seed"             );
-    flag.IntVar( &seed   , "r"     , 0         , "random seed  (shorthand)");
-    flag.BoolVar(&show   , "show" , true       , "show working"            );
-    flag.BoolVar(&show   , "s"    , true       , "show working (shorthand)");
-    flag.BoolVar(&blank  , "blank", true       , "blank walls"             );
-    flag.BoolVar(&blank  , "b"    , true       , "blank walls  (shorthand)");
+    flag.IntVar( &fps      , "fps"   , 0        , "refresh rate"            );
+    flag.IntVar( &fps      , "f"     , 0        , "refresh rate (shorthand)");
+    flag.IntVar( &height   , "height", maxHeight, "maze height"             );
+    flag.IntVar( &height   , "h"     , maxHeight, "maze height  (shorthand)");
+    flag.IntVar( &width    , "width" , maxWidth , "maze width"              );
+    flag.IntVar( &width    , "w"     , maxWidth , "maze width   (shorthand)");
+    flag.IntVar( &depth    , "depth" , 0        , "search depth"            );
+    flag.IntVar( &depth    , "d"     , 0        , "search depth (shorthand)");
+    flag.IntVar( &minLen   , "path"  , 0        , "path length"             );
+    flag.IntVar( &minLen   , "p"     , 0        , "path length  (shorthand)");
+    flag.IntVar( &seed     , "random", 0        , "random seed"             );
+    flag.IntVar( &seed     , "r"     , 0        , "random seed  (shorthand)");
+    flag.BoolVar(&showFlag , "show" , true      , "show working"            );
+    flag.BoolVar(&showFlag , "s"    , true      , "show working (shorthand)");
+    flag.BoolVar(&blankFlag, "blank", true      , "blank walls"             );
+    flag.BoolVar(&blankFlag, "b"    , true      , "blank walls  (shorthand)");
 
     flag.Parse()
 
-    if depth  <  0 || depth  > 100        {; depth  = 100       ;}
-    if fps    <  0 || fps    > 100000     {; fps    = 100000    ;}
-    if height <= 0 || height > max_height {; height = max_height;}
-    if width  <= 0 || width  > max_width  {; width  = max_width ;}
+    if depth  <  0 || depth  > 100       {; depth  = 100      ;}
+    if fps    <  0 || fps    > 100000    {; fps    = 100000   ;}
+    if height <= 0 || height > maxHeight {; height = maxHeight;}
+    if width  <= 0 || width  > maxWidth  {; width  = maxWidth ;}
 
-    if min_len <  0 || min_len >= height * width {
-       min_len =  0
+    if minLen <  0 || minLen >= height * width {
+       minLen =  0
     }
-    if min_len == 0 {
-       min_len = min((height * width) / 2, int(math.Sqrt(float64(height * width))) * 10)
+    if minLen == 0 {
+       minLen = min((height * width) / 2, int(math.Sqrt(float64(height * width))) * 10)
     }
-    clr_screen()
-    set_cursor_off()
+    clrScreen()
+    setCursorOff()
 
     for {
         switch {
@@ -558,25 +558,25 @@ func main() {
             default:          delay = 1000000 / fps
         }
 
-        num_maze_created++
-        if (num_maze_created > 1 || seed == 0) {
+        numMazeCreated++
+        if (numMazeCreated > 1 || seed == 0) {
             seed = time.Now().Nanosecond()
         }
         rand.Seed(int64(seed));
 
-        var path_start_x int
-        var path_start_y int
+        var pathStartX int
+        var pathStartY int
 
-        create_maze(&path_start_x, &path_start_y); if show {; print_maze(); ms_sleep(1000); }
-         solve_maze(&path_start_x, &path_start_y); if show {; print_maze(); ms_sleep(1000); }
+        createMaze(&pathStartX, &pathStartY); if showFlag {; printMaze();  msSleep(1000); }
+         solveMaze(&pathStartX, &pathStartY); if showFlag {; printMaze();  msSleep(1000); }
 
-        if max_path_length >= min_len {
+        if maxPathLength >= minLen {
            break
         }
     }
-    print_maze()
-    set_cursor_on()
+    printMaze()
+    setCursorOn()
     putchar('\n')
-    my_stdout.Flush()
+    myStdout.Flush()
 }
 

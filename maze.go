@@ -278,7 +278,7 @@ func checkOrphan(x, y, dx, dy, depth int) bool {
 func look(heading, x, y, dx, dy, num int, dirTbl []dirTblType, val byte, length int) int {
     check := 0
     if maze[x + dx/2][y + dy/2] == val &&
-       maze[x + dx  ][y + dy  ] == val && !checkOrphan(x, y, dx, dy, depth) && checkDirections(x + dx, y + dy, val, length, &check) {
+       maze[x + dx  ][y + dy  ] == val && !checkOrphan(x, y, dx, dy, length) && checkDirections(x + dx, y + dy, val, length, &check) {
         dirTbl[num].x = dx
         dirTbl[num].y = dy
         dirTbl[num].heading = heading

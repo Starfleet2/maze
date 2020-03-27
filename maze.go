@@ -132,7 +132,8 @@ func clrScreen()            {; fmt.Fprintf(myStdout, "\033[2J"          ); myStd
 func setSolved()            {; fmt.Fprintf(myStdout, "\033[32m\033[1m"  ); myStdout.Flush(); }
 func clrSolved()            {; fmt.Fprintf(myStdout, "\033[30m\033[0m"  ); myStdout.Flush(); }
 
-
+// getConsoleSize returns the number of rows and columns available in the current terminal window.
+// Defaults to 24 rows and 80 columns if the underlying system call fails.
 func getConsoleSize() (int, int) {
     cols, rows, err := terminal.GetSize(0)
     if err != nil {
@@ -142,6 +143,8 @@ func getConsoleSize() (int, int) {
     return rows, cols
 }
 
+// initializeMaze sets the entire maze to walls and creates a path around the perimeter to bound the maze.
+// The maximum x, y values are set, and the initial x, y values are set to random values.
 func initializeMaze(x, y *int) {
     maxX = 2*(height + 1) + 1
     maxY = 2*(width  + 1) + 1
@@ -161,6 +164,7 @@ func initializeMaze(x, y *int) {
     endX = 2*height                    // never change
 }
 
+// restoreMaze returns the maze to a pre-solved state by changing solved or tried cells back to paths.
 func restoreMaze()  {
     for i := 0; i < maxX; i++ {
         for j := 0; j < maxY; j++ {
@@ -172,6 +176,7 @@ func restoreMaze()  {
     }
 }
 
+// printMaze displays the current maze within the terminal window using VT100 line drawing characters.
 func printMaze()  {
     setPosition(0, 0)
     setLineDraw()
@@ -219,25 +224,28 @@ func printMaze()  {
     }
 }
 
-func checkDirections(x, y int, val byte, depth int, checks *int) bool {
+// checkDirections recursively checks to see if a path of a given length can be carved or traced from the given x, y location.
+// (limited to a total of 1/2 million checks)
+func checkDirections(x, y int, val byte, length int, checks *int) bool {
     match := true
 
-    if depth != 0 && *checks < 500000 {
+    if length != 0 && *checks < 500000 {
         *checks++
         numChecks++
         if maxChecks < numChecks  {
            maxChecks = numChecks
         }
                  maze[x    ][y] =  check
-        match = (maze[x - 1][y] == val && maze[x - 2][y] == val && checkDirections(x - 2, y, val, depth - 1, checks)) ||   // look left
-                (maze[x + 1][y] == val && maze[x + 2][y] == val && checkDirections(x + 2, y, val, depth - 1, checks)) ||   // look right
-                (maze[x][y - 1] == val && maze[x][y - 2] == val && checkDirections(x, y - 2, val, depth - 1, checks)) ||   // look up
-                (maze[x][y + 1] == val && maze[x][y + 2] == val && checkDirections(x, y + 2, val, depth - 1, checks))      // look down
+        match = (maze[x - 1][y] == val && maze[x - 2][y] == val && checkDirections(x - 2, y, val, length - 1, checks)) ||   // look left
+                (maze[x + 1][y] == val && maze[x + 2][y] == val && checkDirections(x + 2, y, val, length - 1, checks)) ||   // look right
+                (maze[x][y - 1] == val && maze[x][y - 2] == val && checkDirections(x, y - 2, val, length - 1, checks)) ||   // look up
+                (maze[x][y + 1] == val && maze[x][y + 2] == val && checkDirections(x, y + 2, val, length - 1, checks))      // look down
                  maze[x][y    ] =  val
     }
     return match
 }
 
+// orphan1x1 returns true if a location is surrounded by walls on all 4 sides and paths on the other side of all those walls.
 func orphan1x1(x, y int) bool {
     return      x > 1             &&      y > 1             &&  // bounds check
            maze[x - 1][y] == wall && maze[x - 2][y] == path &&  // horizontal (look left & right)
@@ -246,6 +254,8 @@ func orphan1x1(x, y int) bool {
            maze[x][y + 1] == wall && maze[x][y + 2] == path
 }
 
+// checkOrphan returns true if carving a path at a given location x,y in a given direction dx, dy
+// would create a 1x1 orphan left, right, above, or below the path.
 func checkOrphan(x, y, dx, dy, depth int) bool {
     orphan := false;
 
@@ -264,10 +274,12 @@ func checkOrphan(x, y, dx, dy, depth int) bool {
     return orphan
 }
 
-func look(heading, x, y, dx, dy, num int, val byte, depth int) int {
+// look returns 1 if at a given location x, y a path of a given length can be carved or traced in a given direction dx, dy without creating 1x1 orphans.
+// The direction (heading, dx, dy) is stored in the direction table dirTbl if the path can be created.
+func look(heading, x, y, dx, dy, num int, val byte, length int) int {
     check := 0
     if maze[x + dx/2][y + dy/2] == val &&
-       maze[x + dx  ][y + dy  ] == val && !checkOrphan(x, y, dx, dy, depth) && checkDirections(x + dx, y + dy, val, depth, &check) {
+       maze[x + dx  ][y + dy  ] == val && !checkOrphan(x, y, dx, dy, depth) && checkDirections(x + dx, y + dy, val, length, &check) {
         dirTbl[num].x = dx
         dirTbl[num].y = dy
         dirTbl[num].heading = heading
@@ -276,6 +288,8 @@ func look(heading, x, y, dx, dy, num int, val byte, depth int) int {
     return 0
 }
 
+// findDirections returns the number of directions that a path can be carved or traces from a given location x, y.
+// search controls whether the path length requirement of pathDepth is enforced.
 func findDirections(x, y int, val byte, search bool) int {
     num         := 0
     searchDepth := 0
@@ -297,6 +311,7 @@ func findDirections(x, y int, val byte, search bool) int {
     return (num);
 }
 
+// straightThru returns true if the path at the given location x, y has a path left and right of it, or above and below it
 func straightThru(x, y int, val byte) bool {
     return (maze[x - 1][y] == val && maze[x - 2][y] == val  &&  // horizontal (look left & right)
             maze[x + 1][y] == val && maze[x + 2][y] == val) ||
@@ -304,6 +319,7 @@ func straightThru(x, y int, val byte) bool {
             maze[x][y + 1] == val && maze[x][y + 2] == val)
 }
 
+// findPathStart starts looking at a random x, y location for a position along an existing non-straight through path that can start a new path of at least pathDepth length
 func findPathStart(x, y *int) bool {
     pathDepth = depth;
     for {
@@ -327,6 +343,9 @@ func findPathStart(x, y *int) bool {
     return false
 }
 
+// markCell sets a location x, y inside the maze array to the value (wall, path, solved, tried)
+// It also displays the maze if delay is non-zero and the frame rate is less than 1000/sec
+// and only then for cells at locations with even x, y coordinates (to reduce number of refreshes)
 func markCell(x, y int, val byte) {
     if (maze[x][y] != val) {
         maze[x][y]  = val
@@ -336,6 +355,9 @@ func markCell(x, y int, val byte) {
     }
 }
 
+// carvePath carves a new path in the maze starting at location x, y
+// It does this by repeatedly determining the number of possible directions to move
+// and then randomly choosing one of them and then marking the new cells on the path
 func carvePath(x, y *int) {
     pathDepth = depth
     markCell(*x, *y, path)
@@ -355,6 +377,9 @@ func carvePath(x, y *int) {
     }
 }
 
+// followPath follows a path in the maze starting at location x, y
+// It does this by repeatedly determining if there are any possible directions to move
+// and then choosing the first of them and then marking the new cells on the path as solved
 func followPath(x, y *int) bool {
     lastDir  := 0
     pathDepth = 0
@@ -372,6 +397,9 @@ func followPath(x, y *int) bool {
     return *x > endX
 }
 
+// backTrackPath backtracks a path in the maze starting at location x, y
+// It does this by repeatedly determining if there are any possible directions to move
+// and then choosing the first of them and then marking the new cells on the path as tried (not solved)
 func backTrackPath(x, y *int) {
     lastDir  := 0
     pathDepth = 0
@@ -388,6 +416,8 @@ func backTrackPath(x, y *int) {
     }
 }
 
+// solveMaze solves a maze by starting at the beginning and following each path,
+// back tracking when they dead end, until the end of the maze is found.
 func solveMaze(x, y *int) {
     pathLen = 0
     turnCnt = 0
@@ -400,6 +430,8 @@ func solveMaze(x, y *int) {
     solves++
 }
 
+// createOpenings marks the top and bottom of the maze at locations begX, x and endX, y as paths
+// and then sets x, y to the start of the maze: begX, begY.
 func createOpenings(x, y *int) {
     begY = *x
     endY = *y
@@ -411,11 +443,14 @@ func createOpenings(x, y *int) {
     *y = begY
 }
 
+// deleteOpenings marks the openings in the maze by setting the locations begX, begY and endX, endY back to wall.
 func deleteOpenings()  {
     maze[begX - 1][begY] = wall
     maze[endX + 1][endY] = wall
 }
 
+// searchBestOpenings sets the top an bottom openings to all possible locations and repeatedly solves the maze
+// keeping track of which set of openings produces the longest solution path, then sets x, y to the result.
 func searchBestOpenings(x, y *int) {
     bestPathLen := 0
     bestTurnCnt := 0
@@ -451,6 +486,7 @@ func searchBestOpenings(x, y *int) {
     createOpenings(x, y)
 }
 
+// midWallOpening returns true if there is a mid wall (non-corner) opening in a path at location x, y
 func midWallOpening(x, y int) bool {
     return maze[x    ][y    ] == path &&
            maze[x - 1][y - 1] != wall &&
@@ -459,6 +495,8 @@ func midWallOpening(x, y int) bool {
            maze[x + 1][y + 1] != wall
 }
 
+// pushMidWallOpenings loops over all locations in the maze searching for mid wall openings and pushes horizontal
+// openings to the right, and vertical openings down, and then returns the number of mid wall openings moved.
 func pushMidWallOpenings() int {
     moves := 0;
 
@@ -480,6 +518,9 @@ func pushMidWallOpenings() int {
     return moves
 }
 
+// createMaze initializes the maze array then repeatedly carves new paths until no new path starting locations can be found.
+// Following this it then repeatedly pushes mid wall openings right or down until there are no longer any mid wall openings.
+// Lastly it searches for the best openings, top and bottom, to create the maze with the longest solution path.
 func createMaze(x, y *int) {
     maxChecks  = 0
     mazeLen    = 0
@@ -500,6 +541,8 @@ func createMaze(x, y *int) {
     searchBestOpenings(x, y)
 }
 
+// maze main parses the command line switches and then repeatedly creates and
+// solves mazes until the minimum solution path length criteria is met.
 func main() {
     flag.Usage = func() {
         fmt.Printf("%s\nUsage: %s [options]\n%s", utsSignOn, flag.Arg(0),

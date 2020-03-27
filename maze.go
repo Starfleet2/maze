@@ -80,7 +80,6 @@ var (
                               rightTop  , leftTee    , downTee   , intersection }
 
     maze[maxXSize][maxYSize]  byte
-    dirTbl[4]                 dirTblType
 
     blankFlag       bool
     showFlag        bool
@@ -276,7 +275,7 @@ func checkOrphan(x, y, dx, dy, depth int) bool {
 
 // look returns 1 if at a given location x, y a path of a given length can be carved or traced in a given direction dx, dy without creating 1x1 orphans.
 // The direction (heading, dx, dy) is stored in the direction table dirTbl if the path can be created.
-func look(heading, x, y, dx, dy, num int, val byte, length int) int {
+func look(heading, x, y, dx, dy, num int, dirTbl []dirTblType, val byte, length int) int {
     check := 0
     if maze[x + dx/2][y + dy/2] == val &&
        maze[x + dx  ][y + dy  ] == val && !checkOrphan(x, y, dx, dy, depth) && checkDirections(x + dx, y + dy, val, length, &check) {
@@ -290,7 +289,7 @@ func look(heading, x, y, dx, dy, num int, val byte, length int) int {
 
 // findDirections returns the number of directions that a path can be carved or traces from a given location x, y.
 // search controls whether the path length requirement of pathDepth is enforced.
-func findDirections(x, y int, val byte, search bool) int {
+func findDirections(x, y int, dirTbl []dirTblType, val byte, search bool) int {
     num         := 0
     searchDepth := 0
     numChecks    = 0
@@ -298,10 +297,10 @@ func findDirections(x, y int, val byte, search bool) int {
         if search {
             searchDepth = pathDepth
         }
-        num += look(left , x, y, -2,  0, num, val, searchDepth);
-        num += look(right, x, y,  2,  0, num, val, searchDepth);
-        num += look(up   , x, y,  0, -2, num, val, searchDepth);
-        num += look(down , x, y,  0,  2, num, val, searchDepth);
+        num += look(left , x, y, -2,  0, num, dirTbl, val, searchDepth);
+        num += look(right, x, y,  2,  0, num, dirTbl, val, searchDepth);
+        num += look(up   , x, y,  0, -2, num, dirTbl, val, searchDepth);
+        num += look(down , x, y,  0,  2, num, dirTbl, val, searchDepth);
 
         if num != 0 || search == false || pathDepth == 0 {
            break
@@ -321,6 +320,7 @@ func straightThru(x, y int, val byte) bool {
 
 // findPathStart starts looking at a random x, y location for a position along an existing non-straight through path that can start a new path of at least pathDepth length
 func findPathStart(x, y *int) bool {
+	dirTbl   := make([]dirTblType, 4, 4)
     pathDepth = depth;
     for {
         xStart := rand.Intn(height)
@@ -330,7 +330,7 @@ func findPathStart(x, y *int) bool {
             for j := 0; j < width; j++ {
                 *x = 2*((xStart + i) % height + 1)
                 *y = 2*((yStart + j) % width  + 1)
-                if (maze[*x][*y] == path && !straightThru(*x, *y, path) && findDirections(*x, *y, wall, noSearch) != 0) {
+                if (maze[*x][*y] == path && !straightThru(*x, *y, path) && findDirections(*x, *y, dirTbl, wall, noSearch) != 0) {
                     return true
                 }
             }
@@ -359,10 +359,12 @@ func markCell(x, y int, val byte) {
 // It does this by repeatedly determining the number of possible directions to move
 // and then randomly choosing one of them and then marking the new cells on the path
 func carvePath(x, y *int) {
+	dirTbl   := make([]dirTblType, 4, 4)
     pathDepth = depth
+	numPaths++
     markCell(*x, *y, path)
     for {
-        num := findDirections(*x, *y, wall, search)
+        num := findDirections(*x, *y, dirTbl, wall, search)
         if num == 0 {
            break
         }
@@ -381,10 +383,11 @@ func carvePath(x, y *int) {
 // It does this by repeatedly determining if there are any possible directions to move
 // and then choosing the first of them and then marking the new cells on the path as solved
 func followPath(x, y *int) bool {
+	dirTbl   := make([]dirTblType, 4, 4)
     lastDir  := 0
     pathDepth = 0
     markCell(*x, *y, solved)
-    for ; begX  <= *x && *x <= endX  && findDirections(*x, *y, path, noSearch)  != 0 ; {
+    for ; begX  <= *x && *x <= endX  && findDirections(*x, *y, dirTbl, path, noSearch)  != 0 ; {
         markCell(*x +  dirTbl[0].x/2, *y +  dirTbl[0].y/2, solved)
         markCell(*x +  dirTbl[0].x  , *y +  dirTbl[0].y  , solved)
                  *x += dirTbl[0].x  ; *y += dirTbl[0].y
@@ -401,10 +404,11 @@ func followPath(x, y *int) bool {
 // It does this by repeatedly determining if there are any possible directions to move
 // and then choosing the first of them and then marking the new cells on the path as tried (not solved)
 func backTrackPath(x, y *int) {
+	dirTbl   := make([]dirTblType, 4, 4)
     lastDir  := 0
     pathDepth = 0
     markCell(*x, *y, tried)
-    for ; findDirections(*x, *y, path, noSearch)  == 0 && findDirections(*x, *y, solved, noSearch)  != 0 ; {
+    for ; findDirections(*x, *y, dirTbl, path, noSearch)  == 0 && findDirections(*x, *y, dirTbl, solved, noSearch)  != 0 ; {
         markCell(*x +  dirTbl[0].x/2, *y +  dirTbl[0].y/2, tried)
         markCell(*x +  dirTbl[0].x  , *y +  dirTbl[0].y  , tried)
                  *x += dirTbl[0].x  ; *y += dirTbl[0].y
@@ -528,7 +532,6 @@ func createMaze(x, y *int) {
 
     initializeMaze(x, y)
     for {
-        numPaths++
         carvePath(x, y)
 
         if !findPathStart(x, y) {

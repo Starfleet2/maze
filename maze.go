@@ -99,25 +99,26 @@ var (
     blankFlag         bool
     showFlag          bool
     viewFlag          bool
-    checkFlag         bool
+    lookFlag          bool
 
-    maxX, maxY        int
-    begX, endX        int
-    begY, endY        int
     width             int
     height            int
-    delay             int
     fps               int
     updates           int
     minLen            int
-    pathLen           int
-    turnCnt           int
-    solves            int
-    depth             int
     threads           int
     seed              int
+    depthVal          int
 
+    maxX, maxY        int32
+    begX, endX        int32
+    begY, endY        int32
+    depth             int32
+    delay             int32
+    checkFlag         int32
     mazeLen           int32
+    pathLen           int32
+    turnCnt           int32
     numPaths          int32
     numSolves         int32
     numThreads        int32
@@ -137,28 +138,40 @@ var (
     finishChan        chan struct{}
 )
 
-func msSleep(n   int)       {; time.Sleep(time.Duration(int64(n) * 1000 * 1000)); }
+func msSleep(n   int)          {; time.Sleep(time.Duration(int64(n) * 1000 * 1000)); }
 
-func bool2int(b bool) int   {; if b      {; return 1; }; return 0; }
-func min(x, y    int) int   {; if x <  y {; return x; }; return y; }
-func max(x, y    int) int   {; if x >  y {; return x; }; return y; }
-func nzInt32(x int32) int32 {; if x != 0 {; return x; }; return 1; }
+func bool2int(b bool) int      {; if b      {; return 1; }; return 0; }
+func min(x, y    int) int      {; if x <  y {; return x; }; return y; }
+func max(x, y    int) int      {; if x >  y {; return x; }; return y; }
+func nonZero(x   int) int      {; if x != 0 {; return x; }; return 1; }
 
-func isEven(x    int) bool  {; return (x & 1) == 0; }
-func isOdd( x    int) bool  {; return (x & 1) != 0; }
+func isEven(x    int) bool     {; return (x & 1) == 0; }
+func isOdd( x    int) bool     {; return (x & 1) != 0; }
 
-func putchar(c byte)        {; myStdout.WriteByte(c); }
+func setMaze(x, y, v int) int  {; return int(atomic.SwapInt32(&maze[x][y], int32(v))); }
+func getMaze(x, y    int) int  {; return int(atomic.LoadInt32(&maze[x][y]));           }
 
-func setPosition(x, y int)  {; fmt.Fprintf(myStdout, "\033[%d;%dH", x, y); myStdout.Flush(); }
-func setLineDraw()          {; fmt.Fprintf(myStdout, "\033(0"           ); myStdout.Flush(); }
-func clrLineDraw()          {; fmt.Fprintf(myStdout, "\033(B"           ); myStdout.Flush(); }
-func setCursorOff()         {; fmt.Fprintf(myStdout, "\033[?25l"        ); myStdout.Flush(); }
-func setCursorOn()          {; fmt.Fprintf(myStdout, "\033[?25h"        ); myStdout.Flush(); }
-func clrScreen()            {; fmt.Fprintf(myStdout, "\033[2J"          ); myStdout.Flush(); }
-func setSolved()            {; fmt.Fprintf(myStdout, "\033[32m\033[1m"  ); myStdout.Flush(); }
-func clrSolved()            {; fmt.Fprintf(myStdout, "\033[30m\033[0m"  ); myStdout.Flush(); }
-func setChecked()           {; fmt.Fprintf(myStdout, "\033[31m\033[1m"  ); myStdout.Flush(); }
-func clrChecked()           {; fmt.Fprintf(myStdout, "\033[30m\033[0m"  ); myStdout.Flush(); }
+func setInt( x *int32, v int)  {;            atomic.StoreInt32(x, int32(v));           }
+func clrInt( x *int32)         {;            atomic.StoreInt32(x,  0);                 }
+func incInt( x *int32)         {;            atomic.  AddInt32(x,  1);                 }
+func decInt( x *int32)         {;            atomic.  AddInt32(x, -1);                 }
+func addInt( x *int32, v int)  {;            atomic.  AddInt32(x, int32(v));           }
+func getInt( x *int32)   int   {; return int(atomic. LoadInt32(x));                    }
+func getBool(x *int32)   bool  {; return     atomic. LoadInt32(x) != 0;                }
+func setBool(x *int32, v bool) {;            atomic.StoreInt32(x, int32(bool2int(v))); }
+
+func putchar(c byte)           {; myStdout.WriteByte(c); }
+
+func setPosition(x, y int)     {; fmt.Fprintf(myStdout, "\033[%d;%dH", x, y); myStdout.Flush(); }
+func setLineDraw()             {; fmt.Fprintf(myStdout, "\033(0"           ); myStdout.Flush(); }
+func clrLineDraw()             {; fmt.Fprintf(myStdout, "\033(B"           ); myStdout.Flush(); }
+func setCursorOff()            {; fmt.Fprintf(myStdout, "\033[?25l"        ); myStdout.Flush(); }
+func setCursorOn()             {; fmt.Fprintf(myStdout, "\033[?25h"        ); myStdout.Flush(); }
+func clrScreen()               {; fmt.Fprintf(myStdout, "\033[2J"          ); myStdout.Flush(); }
+func setSolved()               {; fmt.Fprintf(myStdout, "\033[32m\033[1m"  ); myStdout.Flush(); }
+func clrSolved()               {; fmt.Fprintf(myStdout, "\033[30m\033[0m"  ); myStdout.Flush(); }
+func setChecked()              {; fmt.Fprintf(myStdout, "\033[31m\033[1m"  ); myStdout.Flush(); }
+func clrChecked()              {; fmt.Fprintf(myStdout, "\033[30m\033[0m"  ); myStdout.Flush(); }
 
 // getConsoleSize returns the number of rows and columns available in the current terminal window.
 // Defaults to 24 rows and 80 columns if the underlying system call fails.
@@ -174,39 +187,39 @@ func getConsoleSize() (int, int) {
 // initializeMaze sets the entire maze to walls and creates a path around the perimeter to bound the maze.
 // The maximum x, y values are set, and the initial x, y values are set to random values.
 func initializeMaze(x, y *int) {
-    maxX = 2*(height + 1) + 1
-    maxY = 2*(width  + 1) + 1
+    setInt(&maxX, 2*(height + 1) + 1)
+    setInt(&maxY, 2*(width  + 1) + 1)
 
-    for i := 1; i < maxX - 1; i++ {
-        for j := 1; j < maxY - 1; j++ {
-            maze[i][j] = wall
+    for i := 1; i < getInt(&maxX) - 1; i++ {
+        for j := 1; j < getInt(&maxY) - 1; j++ {
+            setMaze(i, j, wall)
         }
     }
-    for i := 0; i < maxX; i++ {; maze[i][0] = path; maze[i][2*(width  + 1)] = path; }
-    for j := 0; j < maxY; j++ {; maze[0][j] = path; maze[2*(height + 1)][j] = path; }
+    for i := 0; i < getInt(&maxX); i++ {; setMaze(i, 0, path); setMaze(i, 2*(width  + 1), path); }
+    for j := 0; j < getInt(&maxY); j++ {; setMaze(0, j, path); setMaze(2*(height + 1), j, path); }
 
     *x = 2*((rand.Intn(height)) + 1)   // random location
     *y = 2*((rand.Intn(width )) + 1)   // for first path
 
-    begX = 2                           // these will
-    endX = 2*height                    // never change
+    setInt(&begX, 2)                   // these will
+    setInt(&endX, 2*height)            // never change
 }
 
 // restoreMaze returns the maze to a pre-solved state by changing solved or tried cells back to paths.
 func restoreMaze()  {
-    for i := 0; i < maxX; i++ {
-        for j := 0; j < maxY; j++ {
-            if (maze[i][j] == solved ||
-                maze[i][j] == tried) {
-                maze[i][j] =  path
+    for i := 0; i < getInt(&maxX); i++ {
+        for j := 0; j < getInt(&maxY); j++ {
+            if (getMaze(i, j) == solved ||
+                getMaze(i, j) == tried) {
+                setMaze(i, j,    path )
             }
         }
     }
 }
 
 // isWall returns true if a cell contains a wall character or a check character (to hide look ahead checks during display)
-func isWall(cell int32) bool {
-    return cell == wall || (!checkFlag && cell == check)
+func isWall(cell int) bool {
+    return cell == wall || (!getBool(&checkFlag) && cell == check)
 }
 
 // outputAsciiMaze outputs the maze in ascii format to a text file
@@ -217,16 +230,16 @@ func outputAsciiMaze() {
             fmt.Fprintf(myStdout, "Error opening output file: ", err)
             myStdout.Flush()
         } else {
-            outFile := bufio.NewWriterSize(f, maxX * maxY)
+            outFile := bufio.NewWriterSize(f, getInt(&maxX) * getInt(&maxY))
             fmt.Fprintf(outFile, "%d %d\n", height, width)
             outFile.Flush()
-            for i := 1; i < maxX - 1; i++ {
-                for j := 1; j < maxY - 1; j++ {
-                    switch maze[i][j] {
-                        case wall  : if isOdd(i) && isOdd(j) {; fmt.Fprintf(outFile, "%c", simpleLookup[1 * bool2int(maze[i-1][j] == wall && (maze[i-1][j-1] != wall || maze[i-1][j+1] != wall)) +    // wall intersection point
-                                                                                                        2 * bool2int(maze[i][j+1] == wall && (maze[i-1][j+1] != wall || maze[i+1][j+1] != wall)) +    // check that there is a path on the diagonal
-                                                                                                        4 * bool2int(maze[i+1][j] == wall && (maze[i+1][j-1] != wall || maze[i+1][j+1] != wall)) +
-                                                                                                        8 * bool2int(maze[i][j-1] == wall && (maze[i-1][j-1] != wall || maze[i+1][j-1] != wall))])
+            for i := 1; i < getInt(&maxX) - 1; i++ {
+                for j := 1; j < getInt(&maxY) - 1; j++ {
+                    switch getMaze(i, j) {
+                        case wall  : if isOdd(i) && isOdd(j) {; fmt.Fprintf(outFile, "%c", simpleLookup[1 * bool2int(getMaze(i-1, j) == wall && (getMaze(i-1, j-1) != wall || getMaze(i-1, j+1) != wall)) +    // wall intersection point
+                                                                                                        2 * bool2int(getMaze(i, j+1) == wall && (getMaze(i-1, j+1) != wall || getMaze(i+1, j+1) != wall)) +    // check that there is a path on the diagonal
+                                                                                                        4 * bool2int(getMaze(i+1, j) == wall && (getMaze(i+1, j-1) != wall || getMaze(i+1, j+1) != wall)) +
+                                                                                                        8 * bool2int(getMaze(i, j-1) == wall && (getMaze(i-1, j-1) != wall || getMaze(i+1, j-1) != wall))])
                                      } else if      isOdd(i) {; fmt.Fprintf(outFile, "-")
                                      } else {                 ; fmt.Fprintf(outFile, "|"); }
                         case path  :                            fmt.Fprintf(outFile, " ")
@@ -249,38 +262,38 @@ func displayMaze()  {
     setPosition(0, 0)
     setLineDraw()
 
-    for i := 1; i < maxX - 1; i++ {
-        for j := 1; j < maxY - 1; j++ {
+    for i := 1; i < getInt(&maxX) - 1; i++ {
+        for j := 1; j < getInt(&maxY) - 1; j++ {
             var vertexChar, solvedChar, leftChar, rightChar, wallChar byte
 
             if isOdd(i) && isOdd(j) {
-                vertexChar = outputLookup[1 * bool2int(isWall(maze[i-1][j]) && (!isWall(maze[i-1][j-1]) || !isWall(maze[i-1][j+1]))) +    // wall intersection point
-                                          2 * bool2int(isWall(maze[i][j+1]) && (!isWall(maze[i-1][j+1]) || !isWall(maze[i+1][j+1]))) +    // check that there is a path on the diagonal
-                                          4 * bool2int(isWall(maze[i+1][j]) && (!isWall(maze[i+1][j-1]) || !isWall(maze[i+1][j+1]))) +
-                                          8 * bool2int(isWall(maze[i][j-1]) && (!isWall(maze[i-1][j-1]) || !isWall(maze[i+1][j-1])))];
+                vertexChar = outputLookup[1 * bool2int(isWall(getMaze(i-1, j)) && (!isWall(getMaze(i-1, j-1)) || !isWall(getMaze(i-1, j+1)))) +    // wall intersection point
+                                          2 * bool2int(isWall(getMaze(i, j+1)) && (!isWall(getMaze(i-1, j+1)) || !isWall(getMaze(i+1, j+1)))) +    // check that there is a path on the diagonal
+                                          4 * bool2int(isWall(getMaze(i+1, j)) && (!isWall(getMaze(i+1, j-1)) || !isWall(getMaze(i+1, j+1)))) +
+                                          8 * bool2int(isWall(getMaze(i, j-1)) && (!isWall(getMaze(i-1, j-1)) || !isWall(getMaze(i+1, j-1))))];
             } else {
-                vertexChar = outputLookup[1 * bool2int(isWall(maze[i-1][j]) && (!isWall(maze[i  ][j-1]) || !isWall(maze[i  ][j+1]))) +    // non-intersection point
-                                          2 * bool2int(isWall(maze[i][j+1]) && (!isWall(maze[i-1][j  ]) || !isWall(maze[i+1][j  ]))) +    // check that there is a path adjacent
-                                          4 * bool2int(isWall(maze[i+1][j]) && (!isWall(maze[i  ][j-1]) || !isWall(maze[i  ][j+1]))) +
-                                          8 * bool2int(isWall(maze[i][j-1]) && (!isWall(maze[i-1][j  ]) || !isWall(maze[i+1][j  ])))];
+                vertexChar = outputLookup[1 * bool2int(isWall(getMaze(i-1, j)) && (!isWall(getMaze(i  , j-1)) || !isWall(getMaze(i  , j+1)))) +    // non-intersection point
+                                          2 * bool2int(isWall(getMaze(i, j+1)) && (!isWall(getMaze(i-1, j  )) || !isWall(getMaze(i+1, j  )))) +    // check that there is a path adjacent
+                                          4 * bool2int(isWall(getMaze(i+1, j)) && (!isWall(getMaze(i  , j-1)) || !isWall(getMaze(i  , j+1)))) +
+                                          8 * bool2int(isWall(getMaze(i, j-1)) && (!isWall(getMaze(i-1, j  )) || !isWall(getMaze(i+1, j  ))))];
             }
-                solvedChar = outputLookup[1 * bool2int(maze[i-1][j] == maze[i][j]) +
-                                          2 * bool2int(maze[i][j+1] == maze[i][j]) +
-                                          4 * bool2int(maze[i+1][j] == maze[i][j]) +
-                                          8 * bool2int(maze[i][j-1] == maze[i][j])]
+                solvedChar = outputLookup[1 * bool2int(getMaze(i-1, j) == getMaze(i, j)) +
+                                          2 * bool2int(getMaze(i, j+1) == getMaze(i, j)) +
+                                          4 * bool2int(getMaze(i+1, j) == getMaze(i, j)) +
+                                          8 * bool2int(getMaze(i, j-1) == getMaze(i, j))]
 
-            if isEven(i) && (maze[i][j-1] == solved || maze[i][j-1] == check) {;  leftChar = horizontal; } else {;  leftChar = blank; }
-            if isEven(i) && (maze[i][j+1] == solved || maze[i][j+1] == check) {; rightChar = horizontal; } else {; rightChar = blank; }
+            if isEven(i) && (getMaze(i, j-1) == solved || getMaze(i, j-1) == check) {;  leftChar = horizontal; } else {;  leftChar = blank; }
+            if isEven(i) && (getMaze(i, j+1) == solved || getMaze(i, j+1) == check) {; rightChar = horizontal; } else {; rightChar = blank; }
 
             if blankFlag {; wallChar = vertexChar; } else {; wallChar = solvedChar; }
 
             switch {
-                case maze[i][j] == solved  :                 setSolved();  putchar(leftChar); if (isEven(j)) {; putchar(solvedChar); putchar(rightChar); }; clrSolved()
-                case maze[i][j] == check   : if checkFlag {; setChecked(); putchar(leftChar); if (isEven(j)) {; putchar(solvedChar); putchar(rightChar); }; clrChecked();
-                                             } else       {;               putchar(blank   ); if (isEven(j)) {; putchar(blank     ); putchar(blank    ); }}
-                case isEven(i) && isEven(j):                               putchar(blank   ); if (isEven(j)) {; putchar(blank     ); putchar(blank    ); }
-                case maze[i][j] == wall    :                               putchar(wallChar); if (isEven(j)) {; putchar(  wallChar); putchar( wallChar); }
-                default                    :                               putchar(blank   ); if (isEven(j)) {; putchar(blank     ); putchar(blank    ); }
+                case getMaze(i, j) == solved:                           setSolved();  putchar(leftChar); if (isEven(j)) {; putchar(solvedChar); putchar(rightChar); }; clrSolved()
+                case getMaze(i, j) == check : if getBool(&checkFlag) {; setChecked(); putchar(leftChar); if (isEven(j)) {; putchar(solvedChar); putchar(rightChar); }; clrChecked();
+                                              } else                 {;               putchar(blank   ); if (isEven(j)) {; putchar(blank     ); putchar(blank    ); }}
+                case isEven(i) && isEven(j) :                                         putchar(blank   ); if (isEven(j)) {; putchar(blank     ); putchar(blank    ); }
+                case getMaze(i, j) == wall  :                                         putchar(wallChar); if (isEven(j)) {; putchar(  wallChar); putchar( wallChar); }
+                default                     :                                         putchar(blank   ); if (isEven(j)) {; putchar(blank     ); putchar(blank    ); }
             }
         }
         putchar('\n')
@@ -290,21 +303,21 @@ func displayMaze()  {
 
     fmt.Fprintf(myStdout, "updates=%d, height=%d, width=%d, seed=%d, num_wall_push=%d, num_maze_created=%d, num_solves=%d, avg_solve_length=%d, solve_length=%d, avg_path_length=%d, num_paths=%d, maze_len=%d, threads=%d, length=%d, checks=%d, max_checks=%d, checks_exceeded=%d %s\r",
                            updates   , height   , width   , seed   ,
-                           atomic.LoadInt32(&numWallPush     ),
-                           atomic.LoadInt32(&numMazeCreated  ),
-                           atomic.LoadInt32(&numSolves       ),
-                           atomic.LoadInt32(&sumsolveLength  ) /
-                   nzInt32(atomic.LoadInt32(&numMazeCreated  )),
-                           atomic.LoadInt32(&solveLength     ),
-                           atomic.LoadInt32(&mazeLen         ) /
-                   nzInt32(atomic.LoadInt32(&numPaths        )),
-                           atomic.LoadInt32(&numPaths        ),
-                           atomic.LoadInt32(&mazeLen         ),
-                           atomic.LoadInt32(&numThreads      ),
-                           atomic.LoadInt32(&dspLength       ),
-                           atomic.LoadInt32(&dspNumChecks    ),
-                           atomic.LoadInt32(&maxChecks       ),
-                           atomic.LoadInt32(&numCheckExceeded),
+                           getInt(&numWallPush     ),
+                           getInt(&numMazeCreated  ),
+                           getInt(&numSolves       ),
+                           getInt(&sumsolveLength  ) /
+                   nonZero(getInt(&numMazeCreated  )),
+                           getInt(&solveLength     ),
+                           getInt(&mazeLen         ) /
+                   nonZero(getInt(&numPaths        )),
+                           getInt(&numPaths        ),
+                           getInt(&mazeLen         ),
+                           getInt(&numThreads      ),
+                           getInt(&dspLength       ),
+                           getInt(&dspNumChecks    ),
+                           getInt(&maxChecks       ),
+                           getInt(&numCheckExceeded),
                            blankLine);
     outputAsciiMaze()
 }
@@ -319,33 +332,33 @@ func displayRoutine () {
 // updateMaze signals displayChan if there is no pending signal and then sleeps delay ms if non-zero
 func updateMaze(length, numChecks int) {
     if numChecks != 0 {
-        atomic.StoreInt32(&dspNumChecks, int32(numChecks))
+        setInt(&dspNumChecks, numChecks)
     }
     select {
         case displayChan <- struct{}{}:
         default:
     }
-    if delay > 0 {
-        msSleep(delay)
+    if getInt(&delay) > 0 {
+        msSleep(getInt(&delay))
     }
 }
 
-// markCell sets a location x, y inside the maze array to the value (wall, path, solved, tried)
+// setCell sets a location x, y inside the maze array to the value (wall, path, solved, tried)
 // It also displays the maze if delay is non-zero and the frame rate is less than 1000/sec
 // and only then for cells at locations with even x, y coordinates (to reduce number of refreshes)
-func markCell(x, y int, value int32, update bool, length, numChecks int) bool {
-    if maze[x][y] == check || maze[x][y] == value {
+func setCell(x, y, value int, update bool, length, numChecks int) bool {
+    if getMaze(x, y) == check || getMaze(x, y) == value {
         return false
     }
-    priorValue := atomic.SwapInt32(&maze[x][y], value)
-    if priorValue == check {
-        maze[x][y] = check
+    priorValue := setMaze(x, y, value)
+    if priorValue  == check {
+        setMaze(x, y, check)
         return false
     }
     if priorValue == value {
         return false
     }
-    if (update || (checkFlag && maze[x][y] == check)) && delay > 0 && fps <= 1000 && isEven(x) && isEven(y) {
+    if (update || (getBool(&checkFlag) && getMaze(x, y) == check)) && getInt(&delay) > 0 && fps <= 1000 && isEven(x) && isEven(y) {
         updateMaze(length, numChecks)
     }
     return true
@@ -353,19 +366,19 @@ func markCell(x, y int, value int32, update bool, length, numChecks int) bool {
 
 // checkDirections recursively checks to see if a path of a given length can be carved or traced from the given x, y location.
 // (limited to a total of 1/2 million checks)
-func checkDirections(x, y, dx, dy, limit int, value int32, length, minLength, checks, numChecks *int) bool {
+func checkDirections(x, y, dx, dy, limit, value int, length, minLength, checks, numChecks *int) bool {
     if *length < 0 {
         return true
     }
     if *checks >= limit {
-        atomic.AddInt32(&numCheckExceeded, 1)
+        incInt(&numCheckExceeded)
         return false
     }
-    if x + dx <= 1 || y + dy <= 1 || maze[x + dx][y + dy] != value || !markCell(x + dx/2, y + dy/2, check, checkFlag, *length, *numChecks) {
+    if x + dx <= 1 || y + dy <= 1 || getMaze(x + dx, y + dy) != value || !setCell(x + dx/2, y + dy/2, check, getBool(&checkFlag), *length, *numChecks) {
         return false
     }
-    if !markCell(x + dx, y + dy, check, checkFlag, *length, *numChecks) {
-        maze[x + dx/2][y + dy/2] = value
+    if !setCell(x + dx, y + dy, check, getBool(&checkFlag), *length, *numChecks) {
+        setMaze(x + dx/2, y + dy/2, value)
         return false
     }
     *length--
@@ -377,7 +390,7 @@ func checkDirections(x, y, dx, dy, limit int, value int32, length, minLength, ch
     for  i := 0; i < 4; i++ {
         dir := &stdDirection[(i + offset) % 4]
         dirLength := *length
-        if maze[x + dx + dir.x/2][y + dy + dir.y/2] == value && maze[x + dx + dir.x][y + dy + dir.y] == value && checkDirections(x + dx, y + dy, dir.x, dir.y, limit, value, &dirLength, minLength, checks, numChecks) {
+        if getMaze(x + dx + dir.x/2, y + dy + dir.y/2) == value && getMaze(x + dx + dir.x, y + dy + dir.y) == value && checkDirections(x + dx, y + dy, dir.x, dir.y, limit, value, &dirLength, minLength, checks, numChecks) {
            *length = dirLength
            match = true
            break
@@ -388,48 +401,48 @@ func checkDirections(x, y, dx, dy, limit int, value int32, length, minLength, ch
     }
     *length++
 
-    maze[x + dx  ][y + dy  ] =  value
-    maze[x + dx/2][y + dy/2] =  value
+    setMaze(x + dx  , y + dy  , value)
+    setMaze(x + dx/2, y + dy/2, value)
     return match
 }
 
 // orphan1x1 returns true if a location is surrounded by walls on all 4 sides and paths on the other side of all those walls.
 func orphan1x1(x, y int) bool {
-    return      x > 1             &&      y > 1             &&  // bounds check
-           maze[x + 1][y] == wall && maze[x + 2][y] == path &&  // vertical (look down & up)
-           maze[x - 1][y] == wall && maze[x - 2][y] == path &&
-           maze[x][y + 1] == wall && maze[x][y + 2] == path &&  // horizontal (right & left)
-           maze[x][y - 1] == wall && maze[x][y - 2] == path
+    return         x > 1             &&         y > 1             &&  // bounds check
+           getMaze(x + 1, y) == wall && getMaze(x + 2, y) == path &&  // vertical (look down & up)
+           getMaze(x - 1, y) == wall && getMaze(x - 2, y) == path &&
+           getMaze(x, y + 1) == wall && getMaze(x, y + 2) == path &&  // horizontal (right & left)
+           getMaze(x, y - 1) == wall && getMaze(x, y - 2) == path
 }
 
 // checkOrphan returns true if carving a path at a given location x,y in a given direction dx, dy
 // would create a 1x1 orphan left, right, above, or below the path.
 func checkOrphan(x, y, dx, dy, length int) bool {
     orphan := false;
-    if      x > 1  && y > 1   && length > 0 && length == depth  &&  // this only makes sense when carving paths, not when solving, and only if we haven't exhausted our search depth
-       maze[x + dx  ][y + dy  ] ==  wall                        &&
-       maze[x + dx/2][y + dy/2] ==  wall                        &&
-       markCell(x + dx  , y + dy  , path, noUpdate, length, 0)  &&  // temporarily set new path
-       markCell(x + dx/2, y + dy/2, path, noUpdate, length, 0) {
+    if      x > 1  && y > 1   && length > 0 && length == getInt(&depth) &&  // this only makes sense when carving paths, not when solving, and only if we haven't exhausted our search depth
+       getMaze(x + dx  , y + dy  ) ==  wall                             &&
+       getMaze(x + dx/2, y + dy/2) ==  wall                             &&
+       setCell(x + dx  , y + dy  , path, noUpdate, length, 0)           &&  // temporarily set new path
+       setCell(x + dx/2, y + dy/2, path, noUpdate, length, 0) {
 
         orphan = orphan1x1(x + dx + 2, y + dy    ) ||   // check for 1x1 orphans below & above of the new location
                  orphan1x1(x + dx - 2, y + dy    ) ||
                  orphan1x1(x + dx    , y + dy + 2) ||   // check for 1x1 orphans right & left  of the new location
                  orphan1x1(x + dx    , y + dy - 2)
 
-        maze[x + dx  ][y + dy  ] = wall                 // restore original walls
-        maze[x + dx/2][y + dy/2] = wall
+        setMaze(x + dx  , y + dy  , wall)               // restore original walls
+        setMaze(x + dx/2, y + dy/2, wall)
     }
     return orphan
 }
 
 // look returns 1 if at a given location x, y a path of a given length can be carved or traced in a given direction dx, dy without creating 1x1 orphans.
 // The direction (heading, dx, dy) is stored in the direction table directions if the path can be created.
-func look(heading, x, y, dx, dy, num int, value int32, directions []dirTable, length, minLength, numChecks *int) int {
+func look(heading, x, y, dx, dy, num, value int, directions []dirTable, length, minLength, numChecks *int) int {
     checks := 0
-    if      x > 1  && y > 1              &&
-       maze[x + dx/2][y + dy/2] == value &&
-       maze[x + dx  ][y + dy  ] == value && !checkOrphan(x, y, dx, dy, *length) && checkDirections(x, y, dx, dy, 10*(depth + 1), value, length, minLength, &checks, numChecks) {
+    if         x > 1  && y > 1              &&
+       getMaze(x + dx/2, y + dy/2) == value &&
+       getMaze(x + dx  , y + dy  ) == value && !checkOrphan(x, y, dx, dy, *length) && checkDirections(x, y, dx, dy, 10*(getInt(&depth) + 1), value, length, minLength, &checks, numChecks) {
         directions[num].x = dx
         directions[num].y = dy
         directions[num].heading = heading
@@ -440,14 +453,14 @@ func look(heading, x, y, dx, dy, num int, value int32, directions []dirTable, le
 
 // findDirections returns the number of directions that a path can be carved or traces from a given location x, y.
 // The path length requirement of length is enforced.
-func findDirections(x, y int, length *int, value int32, directions []dirTable) int {
+func findDirections(x, y int, length *int, value int, directions []dirTable) int {
     num       := 0
     numChecks := 0
-    if value != wall || (maze[x][y] == path && markCell(x, y, check, noUpdate, *length, numChecks)) {
+    if value != wall || (getMaze(x, y) == path && setCell(x, y, check, noUpdate, *length, numChecks)) {
         minLength := [4]int {*length, *length, *length, *length}
         len := *length
         for {
-            atomic.StoreInt32(&dspLength, int32(len))
+            setInt(&dspLength, len)
             dirLength := [4]int {len, len, len, len}
             offset    := rand.Intn(4)
             for i := 0; i < 4; i++ {
@@ -463,27 +476,27 @@ func findDirections(x, y int, length *int, value int32, directions []dirTable) i
             }
             len -= minLength
         }
-        if len == *length && len < depth {
+        if len == *length && len < getInt(&depth) {
            len++
         }
         *length = len
-        if maze[x][y] == check {
-           maze[x][y] =  path
+        if getMaze(x, y) == check {
+           setMaze(x, y, path)
         }
     }
-    if atomic.LoadInt32( &maxChecks) < int32(numChecks)  {
-       atomic.StoreInt32(&maxChecks  , int32(numChecks))
+    if getInt(&maxChecks) < numChecks  {
+       setInt(&maxChecks  , numChecks)
     }
     return (num);
 }
 
 // straightThru returns true if the path at the given location x, y has a path left and right of it, or above and below it
-func straightThru(x, y int, value int32) bool {
-    return        x > 1              &&      y > 1               &&
-           ((maze[x - 1][y] == value && maze[x - 2][y] == value  &&  // vertical   (look up & down)
-             maze[x + 1][y] == value && maze[x + 2][y] == value) ||
-            (maze[x][y - 1] == value && maze[x][y - 2] == value  &&  // horizontal (look left & right)
-             maze[x][y + 1] == value && maze[x][y + 2] == value))
+func straightThru(x, y, value int) bool {
+    return           x > 1              &&         y > 1               &&
+           ((getMaze(x - 1, y) == value && getMaze(x - 2, y) == value  &&  // vertical   (look up & down)
+             getMaze(x + 1, y) == value && getMaze(x + 2, y) == value) ||
+            (getMaze(x, y - 1) == value && getMaze(x, y - 2) == value  &&  // horizontal (look left & right)
+             getMaze(x, y + 1) == value && getMaze(x, y + 2) == value))
 }
 
 // findPathStart starts looking at a random x, y location for a position along an existing non-straight through path that can start a new path of at least depth length
@@ -497,7 +510,7 @@ func findPathStart(x, y *int) bool {
             len := length
             *x = 2*((xStart + i) % height + 1)
             *y = 2*((yStart + j) % width  + 1)
-            if (maze[*x][*y] == path && !straightThru(*x, *y, path) && findDirections(*x, *y, &len, wall, directions) > 0) {
+            if (getMaze(*x, *y) == path && !straightThru(*x, *y, path) && findDirections(*x, *y, &len, wall, directions) > 0) {
                 return true
             }
         }
@@ -510,36 +523,36 @@ func findPathStart(x, y *int) bool {
 // and then randomly choosing one of them and then marking the new cells on the path
 func carvePath(x, y *int) bool {
     directions := make([]dirTable, 4, 4)
-    pathLen    := 0
-    length     := depth
-    atomic.AddInt32(&numPaths, 1)
-    markCell(*x, *y, path, noUpdate, 0, 0)
+    pathLength := 0
+    length     := getInt(&depth)
+    incInt(&numPaths)
+    setCell(*x, *y, path, noUpdate, 0, 0)
     for {
-        num    := findDirections(*x, *y, &length, wall, directions)
+        num := findDirections(*x, *y, &length, wall, directions)
         if num == 0 {
            break
         }
         dir := rand.Intn(num)
-        if !markCell(*x +  directions[dir].x/2, *y +  directions[dir].y/2, path, update, 0, 0) {
+        if !setCell(*x +  directions[dir].x/2, *y +  directions[dir].y/2, path, update, 0, 0) {
             continue
         }
-        if !markCell(*x +  directions[dir].x  , *y +  directions[dir].y  , path, update, 0, 0) {
-            markCell(*x +  directions[dir].x/2, *y +  directions[dir].y/2, wall, update, 0, 0)
-               continue
+        if !setCell(*x +  directions[dir].x  , *y +  directions[dir].y  , path, update, 0, 0) {
+            setCell(*x +  directions[dir].x/2, *y +  directions[dir].y/2, wall, update, 0, 0)
+            continue
         }
         *x += directions[dir].x
         *y += directions[dir].y
-        atomic.AddInt32(&mazeLen, 1)
-        pathLen++
+        incInt(&mazeLen)
+        pathLength++
     }
-    if delay > 0 {
+    if getInt(&delay) > 0 {
         updateMaze(0, 0)
     }
-    if atomic.LoadInt32(&numThreads) < int32(threads) {
-       atomic. AddInt32(&numThreads, 1)
+    if getInt(&numThreads) < threads {
+       incInt(&numThreads)
        go carveRoutine()
     }
-    return pathLen > 0
+    return pathLength > 0
 }
 
 // followPath follows a path in the maze starting at location x, y
@@ -549,18 +562,18 @@ func followPath(x, y *int) bool {
     directions := make([]dirTable, 4, 4)
     lastDir    :=  0
     length     := -1
-    markCell(*x, *y, solved, noUpdate, 0, 0)
-    for begX  <= *x && *x <= endX && findDirections(*x, *y, &length, path, directions) > 0 {
-        markCell(*x +  directions[0].x  , *y +  directions[0].y  , solved, update, 0, 0)
-        markCell(*x +  directions[0].x/2, *y +  directions[0].y/2, solved, update, 0, 0)
-                 *x += directions[0].x  ; *y += directions[0].y
-        pathLen++
+    setCell(*x, *y, solved, noUpdate, 0, 0)
+    for getInt(&begX)  <= *x && *x <= getInt(&endX) && findDirections(*x, *y, &length, path, directions) > 0 {
+        setCell(*x +  directions[0].x  , *y +  directions[0].y  , solved, update, 0, 0)
+        setCell(*x +  directions[0].x/2, *y +  directions[0].y/2, solved, update, 0, 0)
+                *x += directions[0].x  ; *y += directions[0].y
+        incInt(&pathLen)
         if (lastDir != directions[0].heading)  {
             lastDir  = directions[0].heading
-            turnCnt++
+            incInt(&turnCnt)
         }
     }
-    return *x > endX
+    return *x > getInt(&endX)
 }
 
 // backTrackPath backtracks a path in the maze starting at location x, y
@@ -570,15 +583,15 @@ func backTrackPath(x, y *int) {
     directions := make([]dirTable, 4, 4)
     lastDir    :=  0
     length     := -1
-    markCell(*x, *y, tried, noUpdate, 0, 0)
+    setCell(*x, *y, tried, noUpdate, 0, 0)
     for findDirections(*x, *y, &length, path, directions) == 0 && findDirections(*x, *y, &length, solved, directions) > 0 {
-        markCell(*x +  directions[0].x  , *y +  directions[0].y  , tried, update, 0, 0)
-        markCell(*x +  directions[0].x/2, *y +  directions[0].y/2, tried, update, 0, 0)
-                 *x += directions[0].x  ; *y += directions[0].y
-        pathLen--
+        setCell(*x +  directions[0].x  , *y +  directions[0].y  , tried, update, 0, 0)
+        setCell(*x +  directions[0].x/2, *y +  directions[0].y/2, tried, update, 0, 0)
+                *x += directions[0].x  ; *y += directions[0].y
+        decInt(&pathLen)
         if (lastDir != directions[0].heading)  {
             lastDir  = directions[0].heading;
-            turnCnt--
+            decInt(&turnCnt)
         }
     }
 }
@@ -586,40 +599,35 @@ func backTrackPath(x, y *int) {
 // solveMaze solves a maze by starting at the beginning and following each path,
 // back tracking when they dead end, until the end of the maze is found.
 func solveMaze(x, y *int) {
-    saveCheck := checkFlag
-    checkFlag  = false
-    saveDepth := depth
-    depth      = -1
-    pathLen    = 0
-    turnCnt    = 0
+    saveCheck := getBool(&checkFlag); setBool(&checkFlag, false)
+    saveDepth := getInt( &depth    ); setInt( &depth    , -1   )
+    setInt(&pathLen, 0)
+    setInt(&turnCnt, 0)
 
-    maze[begX - 1][begY] = solved
+    setMaze(getInt(&begX) - 1, getInt(&begY), solved)
     for  !followPath(x, y) {
        backTrackPath(x, y)
     }
-    maze[endX + 1][endY] = solved
-    checkFlag = saveCheck
-    depth     = saveDepth
-    solves++
+    setMaze(getInt(&endX) + 1, getInt(&endY), solved)
+    setBool(&checkFlag, saveCheck)
+    setInt( &depth    , saveDepth)
 }
 
 // createOpenings marks the top and bottom of the maze at locations begX, x and endX, y as paths
 // and then sets x, y to the start of the maze: begX, begY.
 func createOpenings(x, y *int) {
-    begY = *x
-    endY = *y
-
-    maze[begX - 1][begY] = path
-    maze[endX + 1][endY] = path
-
-    *x = begX
-    *y = begY
+    setInt(&begY, *x)
+    setInt(&endY, *y)
+    setMaze(getInt(&begX) - 1, getInt(&begY), path)
+    setMaze(getInt(&endX) + 1, getInt(&endY), path)
+    *x = getInt(&begX)
+    *y = getInt(&begY)
 }
 
 // deleteOpenings marks the openings in the maze by setting the locations begX, begY and endX, endY back to wall.
 func deleteOpenings()  {
-    maze[begX - 1][begY] = wall
-    maze[endX + 1][endY] = wall
+    setMaze(getInt(&begX) - 1, getInt(&begY), wall)
+    setMaze(getInt(&endX) + 1, getInt(&endY), wall)
 }
 
 // searchBestOpenings sets the top an bottom openings to all possible locations and repeatedly solves the maze
@@ -629,8 +637,8 @@ func searchBestOpenings(x, y *int) {
     bestTurnCnt := 0
     bestStart   := 2
     bestFinish  := 2
-    saveDelay   := delay    // don't print updates while solving for best openings
-    delay        = 0
+    saveDelay   := getInt(&delay)    // don't print updates while solving for best openings
+    setInt(&delay, 0)
 
     for i := 0; i < width; i++ {
         for j := 0; j < width; j++ {
@@ -638,41 +646,41 @@ func searchBestOpenings(x, y *int) {
             finish := 2*(j + 1)
             *x = start
             *y = finish
-            if maze[begX][start  - 1] != wall && maze[begX][start  + 1] != wall {; continue; }
-            if maze[endX][finish - 1] != wall && maze[endX][finish + 1] != wall {; continue; }
+            if getMaze(getInt(&begX), start  - 1) != wall && getMaze(getInt(&begX), start  + 1) != wall {; continue; }
+            if getMaze(getInt(&endX), finish - 1) != wall && getMaze(getInt(&endX), finish + 1) != wall {; continue; }
             createOpenings(x, y)
             solveMaze(x, y)
-            if pathLen  >  bestPathLen ||
-              (pathLen  == bestPathLen &&
-               turnCnt  >  bestTurnCnt) {
-               bestStart     = start
-               bestFinish    = finish
-               bestTurnCnt   = turnCnt
-               bestPathLen   = pathLen
-               atomic.StoreInt32(&solveLength, int32(pathLen))
+            if getInt(&pathLen)  >  bestPathLen ||
+              (getInt(&pathLen)  == bestPathLen &&
+               getInt(&turnCnt)  >  bestTurnCnt) {
+               bestStart   = start
+               bestFinish  = finish
+               bestTurnCnt = getInt(&turnCnt)
+               bestPathLen = getInt(&pathLen)
+               setInt(&solveLength, getInt(&pathLen))
             }
             restoreMaze()
             deleteOpenings()
-            atomic.AddInt32(&numSolves, 1)
+            incInt(&numSolves)
         }
     }
-    atomic.AddInt32(&sumsolveLength, atomic.LoadInt32(&solveLength))
+    addInt(&sumsolveLength, getInt(&solveLength))
     if viewFlag {       // only restore delay value if view solve flag is set
-        delay = saveDelay
+        setInt(&delay, saveDelay)
     }
-    *x    = bestStart
-    *y    = bestFinish
+    *x = bestStart
+    *y = bestFinish
     createOpenings(x, y)
 }
 
 // midWallOpening returns true if there is a mid wall (non-corner) opening in a path at location x, y
 func midWallOpening(x, y int) bool {
-    return     x > 0 && y > 0         &&
-           maze[x    ][y    ] == path &&
-           maze[x - 1][y - 1] != wall &&
-           maze[x - 1][y + 1] != wall &&
-           maze[x + 1][y - 1] != wall &&
-           maze[x + 1][y + 1] != wall
+    return        x > 0 && y > 0         &&
+           getMaze(x    , y    ) == path &&
+           getMaze(x - 1, y - 1) != wall &&
+           getMaze(x - 1, y + 1) != wall &&
+           getMaze(x + 1, y - 1) != wall &&
+           getMaze(x + 1, y + 1) != wall
 }
 
 // pushMidWallOpenings loops over all locations in the maze searching for mid wall openings and pushes horizontal
@@ -683,16 +691,16 @@ func pushMidWallOpenings() {
         for i := 1; i < 2 * (height + 1); i++ {
             for j := (i & 1) + 1; j < 2 * (width + 1); j += 2 {
                 if (midWallOpening(i, j)) {
-                    markCell(i, j, wall, noUpdate, 0, 0)
-                    if isOdd(i) {; markCell(i,  j + 2, path, update, 0, 0)   // push right
-                    } else {;      markCell(i + 2,  j, path, update, 0, 0)   // push down
+                    setCell(i, j, wall, noUpdate, 0, 0)
+                    if isOdd(i) {; setCell(i,  j + 2, path, update, 0, 0)   // push right
+                    } else {;      setCell(i + 2,  j, path, update, 0, 0)   // push down
                     }
                     moves++
-                    atomic.AddInt32(&numWallPush, 1)
+                    incInt(&numWallPush)
                 }
             }
         }
-        if delay > 0 {
+        if getInt(&delay) > 0 {
             updateMaze(0, 0)
         }
         if moves == 0 {
@@ -723,14 +731,14 @@ func carveRoutine() {
 // Following this it then repeatedly pushes mid wall openings right or down until there are no longer any mid wall openings.
 // Lastly it searches for the best openings, top and bottom, to create the maze with the longest solution path.
 func createMaze(x, y *int) {
-    atomic.StoreInt32(&maxChecks       , 0)
-    atomic.StoreInt32(&mazeLen         , 0)
-    atomic.StoreInt32(&numPaths        , 0)
-    atomic.StoreInt32(&numCheckExceeded, 0)
+    clrInt(&maxChecks       )
+    clrInt(&mazeLen         )
+    clrInt(&numPaths        )
+    clrInt(&numCheckExceeded)
 
     initializeMaze(x, y)
     carvePaths(*x, *y)
-    for i := 0; int32(i) < atomic.LoadInt32(&numThreads); i++ {
+    for i := 0; i < getInt(&numThreads); i++ {
         <- finishChan
     }
     pushMidWallOpenings()
@@ -771,8 +779,8 @@ func main() {
     flag.IntVar(   &width     , "w"      , maxWidth , "maze width      (shorthand)");
     flag.IntVar(   &threads   , "threads", 0        , "path threads"               );
     flag.IntVar(   &threads   , "t"      , 0        , "path threads    (shorthand)");
-    flag.IntVar(   &depth     , "depth"  , 0        , "search depth"               );
-    flag.IntVar(   &depth     , "d"      , 0        , "search depth    (shorthand)");
+    flag.IntVar(   &depthVal  , "depth"  , 0        , "search depth"               );
+    flag.IntVar(   &depthVal  , "d"      , 0        , "search depth    (shorthand)");
     flag.IntVar(   &minLen    , "path"   , 0        , "path length"                );
     flag.IntVar(   &minLen    , "p"      , 0        , "path length     (shorthand)");
     flag.IntVar(   &seed      , "random" , 0        , "random seed"                );
@@ -781,8 +789,8 @@ func main() {
     flag.BoolVar(  &showFlag  , "s"      , false    , "show working    (shorthand)");
     flag.BoolVar(  &viewFlag  , "view"   , false    , "show solving"               );
     flag.BoolVar(  &viewFlag  , "v"      , false    , "show solving    (shorthand)");
-    flag.BoolVar(  &checkFlag , "look"   , false    , "show look ahead"            );
-    flag.BoolVar(  &checkFlag , "l"      , false    , "show look ahead (shorthand)");
+    flag.BoolVar(  &lookFlag  , "look"   , false    , "show look ahead"            );
+    flag.BoolVar(  &lookFlag  , "l"      , false    , "show look ahead (shorthand)");
     flag.BoolVar(  &blankFlag , "blank"  , false    , "blank walls"                );
     flag.BoolVar(  &blankFlag , "b"      , false    , "blank walls     (shorthand)");
     flag.StringVar(&outputName, "output" , ""       , "output ascii"               );
@@ -790,27 +798,30 @@ func main() {
 
     flag.Parse()
 
-    if depth  <  0 || depth  > 100            {; depth  = 100           ;}
-    if fps    <  0 || fps    > 100000         {; fps    = 100000        ;}
-    if height <= 0 || height > maxHeight      {; height = maxHeight     ;}
-    if width  <= 0 || width  > maxWidth       {; width  = maxWidth      ;}
-    if minLen <  0 || minLen > height*width/3 {; minLen = height*width/3;}
+    if depthVal <  0 || depthVal > 100            {; depthVal = 100           ;}
+    if fps      <  0 || fps      > 100000         {; fps      = 100000        ;}
+    if height   <= 0 || height   > maxHeight      {; height   = maxHeight     ;}
+    if width    <= 0 || width    > maxWidth       {; width    = maxWidth      ;}
+    if minLen   <  0 || minLen   > height*width/3 {; minLen   = height*width/3;}
+
+    setBool(&checkFlag, lookFlag);
+    setInt( &depth    , depthVal);
 
     clrScreen()
     setCursorOff()
     go displayRoutine()
 
     for {
-        atomic.StoreInt32(&numThreads, 0)
+        clrInt(&numThreads)
 
         switch {
-            case fps ==    0: delay = 0
-            case fps <= 1000: delay = 1000 / fps
-            default:          delay = 1000000 / fps
+            case fps ==    0: setInt(&delay,       0      )
+            case fps <= 1000: setInt(&delay,    1000 / fps)
+            default:          setInt(&delay, 1000000 / fps)
         }
 
-        atomic.AddInt32(&numMazeCreated, 1)
-        if (atomic.LoadInt32(&numMazeCreated) > 1 || seed == 0) {
+        incInt(&numMazeCreated)
+        if (getInt(&numMazeCreated) > 1 || seed == 0) {
             seed = time.Now().Nanosecond()
         }
         rand.Seed(int64(seed));
@@ -821,7 +832,7 @@ func main() {
         createMaze(&pathStartX, &pathStartY); if showFlag {; updateMaze(0, 0);  msSleep(1000); }
          solveMaze(&pathStartX, &pathStartY); if showFlag {; updateMaze(0, 0);  msSleep(1000); }
 
-        if atomic.LoadInt32(&solveLength) >= int32(minLen) {
+        if getInt(&solveLength) >= minLen {
            break
         }
     }

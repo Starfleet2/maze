@@ -14,6 +14,7 @@
  * Rev 2.0 -- translated to go (and converted to camelCase)
  * Rev 2.1 -- added multi-threaded generation
  * Rev 2.2 -- improved (more efficient) look ahead
+ * Rev 2.3 -- added multi-threaded solving
  */
 package main
 
@@ -29,7 +30,7 @@ import (
 )
 
 const (
-    version      = "2.2"
+    version      = "2.3"
     utsSignOn    = "\n" + "Maze Generation Console Utility "+ version +
                    "\n" + "Copyright (c) 2016-2020" +
                    "\n\n"
@@ -116,6 +117,7 @@ var (
     depth             int32
     delay             int32
     checkFlag         int32
+    solvedFlag        int32
     mazeLen           int32
     pathLen           int32
     turnCnt           int32
@@ -187,6 +189,12 @@ func getConsoleSize() (int, int) {
 // initializeMaze sets the entire maze to walls and creates a path around the perimeter to bound the maze.
 // The maximum x, y values are set, and the initial x, y values are set to random values.
 func initializeMaze(x, y *int) {
+    clrInt(&maxChecks       )
+    clrInt(&mazeLen         )
+    clrInt(&numThreads      )
+    clrInt(&numPaths        )
+    clrInt(&numCheckExceeded)
+
     setInt(&maxX, 2*(height + 1) + 1)
     setInt(&maxY, 2*(width  + 1) + 1)
 
@@ -215,11 +223,6 @@ func restoreMaze()  {
             }
         }
     }
-}
-
-// isWall returns true if a cell contains a wall character or a check character (to hide look ahead checks during display)
-func isWall(cell int) bool {
-    return cell == wall || (!getBool(&checkFlag) && cell == check)
 }
 
 // outputAsciiMaze outputs the maze in ascii format to a text file
@@ -257,6 +260,11 @@ func outputAsciiMaze() {
     }
 }
 
+// isWall returns true if a cell contains a wall character or a check character (to hide look ahead checks during display)
+func isWall(cell int) bool {
+    return cell == wall || (!getBool(&checkFlag) && cell == check)
+}
+
 // displayMaze displays the current maze within the terminal window using VT100 line drawing characters.
 func displayMaze()  {
     setPosition(0, 0)
@@ -292,7 +300,7 @@ func displayMaze()  {
                 case getMaze(i, j) == check : if getBool(&checkFlag) {; setChecked(); putchar(leftChar); if (isEven(j)) {; putchar(solvedChar); putchar(rightChar); }; clrChecked();
                                               } else                 {;               putchar(blank   ); if (isEven(j)) {; putchar(blank     ); putchar(blank    ); }}
                 case isEven(i) && isEven(j) :                                         putchar(blank   ); if (isEven(j)) {; putchar(blank     ); putchar(blank    ); }
-                case getMaze(i, j) == wall  :                                         putchar(wallChar); if (isEven(j)) {; putchar(  wallChar); putchar( wallChar); }
+                case getMaze(i, j) == wall  :                                         putchar(wallChar); if (isEven(j)) {; putchar(wallChar  ); putchar(wallChar ); }
                 default                     :                                         putchar(blank   ); if (isEven(j)) {; putchar(blank     ); putchar(blank    ); }
             }
         }
@@ -330,7 +338,7 @@ func displayRoutine () {
 }
 
 // updateMaze signals displayChan if there is no pending signal and then sleeps delay ms if non-zero
-func updateMaze(length, numChecks int) {
+func updateMaze(numChecks int) {
     if numChecks != 0 {
         setInt(&dspNumChecks, numChecks)
     }
@@ -359,7 +367,7 @@ func setCell(x, y, value int, update bool, length, numChecks int) bool {
         return false
     }
     if (update || (getBool(&checkFlag) && getMaze(x, y) == check)) && getInt(&delay) > 0 && fps <= 1000 && isEven(x) && isEven(y) {
-        updateMaze(length, numChecks)
+        updateMaze(numChecks)
     }
     return true
 }
@@ -374,7 +382,7 @@ func checkDirections(x, y, dx, dy, limit, value int, length, minLength, checks, 
         incInt(&numCheckExceeded)
         return false
     }
-    if x + dx <= 1 || y + dy <= 1 || getMaze(x + dx, y + dy) != value || !setCell(x + dx/2, y + dy/2, check, getBool(&checkFlag), *length, *numChecks) {
+    if x + dx < 0 || y + dy < 0 || getMaze(x + dx, y + dy) != value || !setCell(x + dx/2, y + dy/2, check, getBool(&checkFlag), *length, *numChecks) {
         return false
     }
     if !setCell(x + dx, y + dy, check, getBool(&checkFlag), *length, *numChecks) {
@@ -384,7 +392,6 @@ func checkDirections(x, y, dx, dy, limit, value int, length, minLength, checks, 
     *length--
     *checks++
     *numChecks++
-
     offset := rand.Intn(4)
     match  := false
     for  i := 0; i < 4; i++ {
@@ -400,7 +407,6 @@ func checkDirections(x, y, dx, dy, limit, value int, length, minLength, checks, 
        *minLength = *length
     }
     *length++
-
     setMaze(x + dx  , y + dy  , value)
     setMaze(x + dx/2, y + dy/2, value)
     return match
@@ -546,13 +552,37 @@ func carvePath(x, y *int) bool {
         pathLength++
     }
     if getInt(&delay) > 0 {
-        updateMaze(0, 0)
+        updateMaze(0)
     }
     if getInt(&numThreads) < threads {
        incInt(&numThreads)
        go carveRoutine()
     }
     return pathLength > 0
+}
+
+// followDir marks the maze solved in the given direction starting at x, y
+// and updates the path length & turn count accordingly
+func followDir (x, y *int, direction dirTable, lastDir int) {
+    setCell(*x + direction.x/2, *y + direction.y/2, solved, update, 0, 0)
+    setCell(*x + direction.x  , *y + direction.y  , solved, update, 0, 0)
+    incInt(&pathLen)
+    if (lastDir != direction.heading)  {
+        lastDir  = direction.heading
+        incInt(&turnCnt)
+    }
+}
+
+// unfollowDir marks the maze tried in the given direction starting at x, y
+// and updates the path length & turn count accordingly
+func unfollowDir (x, y *int, direction dirTable, lastDir int) {
+    setCell(*x                , *y                , tried, update, 0, 0)
+    setCell(*x + direction.x/2, *y + direction.y/2, tried, update, 0, 0)
+    decInt(&pathLen)
+    if (lastDir != direction.heading)  {
+        lastDir  = direction.heading
+        decInt(&turnCnt)
+    }
 }
 
 // followPath follows a path in the maze starting at location x, y
@@ -563,17 +593,28 @@ func followPath(x, y *int) bool {
     lastDir    :=  0
     length     := -1
     setCell(*x, *y, solved, noUpdate, 0, 0)
-    for getInt(&begX)  <= *x && *x <= getInt(&endX) && findDirections(*x, *y, &length, path, directions) > 0 {
-        setCell(*x +  directions[0].x  , *y +  directions[0].y  , solved, update, 0, 0)
-        setCell(*x +  directions[0].x/2, *y +  directions[0].y/2, solved, update, 0, 0)
-                *x += directions[0].x  ; *y += directions[0].y
-        incInt(&pathLen)
-        if (lastDir != directions[0].heading)  {
-            lastDir  = directions[0].heading
-            incInt(&turnCnt)
+    for getInt(&begX)  <= *x && *x <= getInt(&endX) {
+        num := findDirections(*x, *y, &length, path, directions)
+        if num == 0 {
+            break
         }
+        followDir(x, y, directions[0], lastDir)
+        if threads > 1 && num > 1 && getBool(&solvedFlag) == false {
+            for i := 1; i < num; i++ {
+                incInt(&numThreads)
+                followDir(x, y, directions[i], lastDir)
+                go solve(*x  +  directions[i].x, *y + directions[i].y)
+            }
+        }
+        *x += directions[0].x
+        *y += directions[0].y
     }
-    return *x > getInt(&endX)
+    if *x > getInt(&endX) {
+        setBool(&solvedFlag, true)
+        return true
+    } else {
+        return false
+    }
 }
 
 // backTrackPath backtracks a path in the maze starting at location x, y
@@ -583,16 +624,26 @@ func backTrackPath(x, y *int) {
     directions := make([]dirTable, 4, 4)
     lastDir    :=  0
     length     := -1
-    setCell(*x, *y, tried, noUpdate, 0, 0)
-    for findDirections(*x, *y, &length, path, directions) == 0 && findDirections(*x, *y, &length, solved, directions) > 0 {
-        setCell(*x +  directions[0].x  , *y +  directions[0].y  , tried, update, 0, 0)
-        setCell(*x +  directions[0].x/2, *y +  directions[0].y/2, tried, update, 0, 0)
-                *x += directions[0].x  ; *y += directions[0].y
-        decInt(&pathLen)
-        if (lastDir != directions[0].heading)  {
-            lastDir  = directions[0].heading;
-            decInt(&turnCnt)
-        }
+    for (threads > 1 || findDirections(*x, *y, &length, path  , directions) == 0) &&
+                        findDirections(*x, *y, &length, solved, directions) == 1 {
+        unfollowDir(x, y, directions[0], lastDir)
+        *x += directions[0].x
+        *y += directions[0].y
+    }
+}
+
+// solveRoutine calls follows a single path and backtracks if it doesn't complete the maze
+func solve(x, y int) {
+    if   !followPath(&x, &y) {
+       backTrackPath(&x, &y)
+    }
+    finishChan <- struct{}{}
+}
+
+// waitThreadsDone waits until numThreads signals are received on the finish channel
+func waitThreadsDone() {
+    for i := 0; i < getInt(&numThreads); i++ {
+        <- finishChan
     }
 }
 
@@ -601,14 +652,23 @@ func backTrackPath(x, y *int) {
 func solveMaze(x, y *int) {
     saveCheck := getBool(&checkFlag); setBool(&checkFlag, false)
     saveDepth := getInt( &depth    ); setInt( &depth    , -1   )
-    setInt(&pathLen, 0)
-    setInt(&turnCnt, 0)
+    setBool(&solvedFlag, false)
+    setInt( &pathLen   , 0)
+    setInt( &turnCnt   , 0)
 
+    setMaze(getInt(&begX) - 2, getInt(&begY), solved)
     setMaze(getInt(&begX) - 1, getInt(&begY), solved)
-    for  !followPath(x, y) {
-       backTrackPath(x, y)
+    if threads > 1 {
+        setInt(&numThreads, 1)
+        go solve(*x, *y)
+        waitThreadsDone()
+    } else {
+        for  !followPath(x, y) {
+           backTrackPath(x, y)
+        }
     }
     setMaze(getInt(&endX) + 1, getInt(&endY), solved)
+    setMaze(getInt(&endX) + 2, getInt(&endY), solved)
     setBool(&checkFlag, saveCheck)
     setInt( &depth    , saveDepth)
 }
@@ -701,7 +761,7 @@ func pushMidWallOpenings() {
             }
         }
         if getInt(&delay) > 0 {
-            updateMaze(0, 0)
+            updateMaze(0)
         }
         if moves == 0 {
             break
@@ -711,7 +771,6 @@ func pushMidWallOpenings() {
 
 // carvePaths continuuosly carves new paths while it can find starting locations for new paths
 func carvePaths(x, y int) {
-
     if x > 0 && y > 0 {
         carvePath(&x, &y)
     }
@@ -731,16 +790,9 @@ func carveRoutine() {
 // Following this it then repeatedly pushes mid wall openings right or down until there are no longer any mid wall openings.
 // Lastly it searches for the best openings, top and bottom, to create the maze with the longest solution path.
 func createMaze(x, y *int) {
-    clrInt(&maxChecks       )
-    clrInt(&mazeLen         )
-    clrInt(&numPaths        )
-    clrInt(&numCheckExceeded)
-
     initializeMaze(x, y)
     carvePaths(*x, *y)
-    for i := 0; i < getInt(&numThreads); i++ {
-        <- finishChan
-    }
+    waitThreadsDone()
     pushMidWallOpenings()
     searchBestOpenings(x, y)
 }
@@ -812,8 +864,6 @@ func main() {
     go displayRoutine()
 
     for {
-        clrInt(&numThreads)
-
         switch {
             case fps ==    0: setInt(&delay,       0      )
             case fps <= 1000: setInt(&delay,    1000 / fps)
@@ -829,14 +879,14 @@ func main() {
         var pathStartX int
         var pathStartY int
 
-        createMaze(&pathStartX, &pathStartY); if showFlag {; updateMaze(0, 0);  msSleep(1000); }
-         solveMaze(&pathStartX, &pathStartY); if showFlag {; updateMaze(0, 0);  msSleep(1000); }
+        createMaze(&pathStartX, &pathStartY); if showFlag {; updateMaze(0);  msSleep(1000); }
+         solveMaze(&pathStartX, &pathStartY); if showFlag {; updateMaze(0);  msSleep(1000); }
 
         if getInt(&solveLength) >= minLen {
            break
         }
     }
-    updateMaze(0, 0)
+    updateMaze(0)
     msSleep(100)
     restoreMaze()
     outputAsciiMaze()

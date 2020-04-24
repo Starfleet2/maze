@@ -1,4 +1,4 @@
-/* maze.c - Simple maze generator
+/* maze.go - Simple maze generator
  * By Dirk Gates <dirk.gates@icancelli.com>
  * Copyright 2016-2020 Dirk Gates
  *
@@ -397,7 +397,8 @@ func checkDirections(x, y, dx, dy, limit, value int, length, minLength, checks, 
     for  i := 0; i < 4; i++ {
         dir := &stdDirection[(i + offset) % 4]
         dirLength := *length
-        if getMaze(x + dx + dir.x/2, y + dy + dir.y/2) == value && getMaze(x + dx + dir.x, y + dy + dir.y) == value && checkDirections(x + dx, y + dy, dir.x, dir.y, limit, value, &dirLength, minLength, checks, numChecks) {
+        if getMaze(x + dx + dir.x/2, y + dy + dir.y/2) == value &&
+           getMaze(x + dx + dir.x  , y + dy + dir.y  ) == value && checkDirections(x + dx, y + dy, dir.x, dir.y, limit, value, &dirLength, minLength, checks, numChecks) {
            *length = dirLength
            match = true
            break
@@ -505,18 +506,17 @@ func straightThru(x, y, value int) bool {
              getMaze(x, y + 1) == value && getMaze(x, y + 2) == value))
 }
 
-// findPathStart starts looking at a random x, y location for a position along an existing non-straight through path that can start a new path of at least depth length
+// findPathStart starts looking at a random x, y location for a position along an existing non-straight through path that can start a new path
 func findPathStart(x, y *int) bool {
     directions := make([]dirTable, 4, 4)
-    length := 0
     xStart := rand.Intn(height)
     yStart := rand.Intn(width )
+    length := -1
     for  i := 0; i < height; i++ {
         for j := 0; j < width; j++ {
-            len := length
             *x = 2*((xStart + i) % height + 1)
             *y = 2*((yStart + j) % width  + 1)
-            if (getMaze(*x, *y) == path && !straightThru(*x, *y, path) && findDirections(*x, *y, &len, wall, directions) > 0) {
+            if (getMaze(*x, *y) == path && !straightThru(*x, *y, path) && findDirections(*x, *y, &length, wall, directions) > 0) {
                 return true
             }
         }
@@ -529,8 +529,8 @@ func findPathStart(x, y *int) bool {
 // and then randomly choosing one of them and then marking the new cells on the path
 func carvePath(x, y *int) bool {
     directions := make([]dirTable, 4, 4)
-    pathLength := 0
     length     := getInt(&depth)
+    pathLength := 0
     incInt(&numPaths)
     setCell(*x, *y, path, noUpdate, 0, 0)
     for {
@@ -539,11 +539,11 @@ func carvePath(x, y *int) bool {
            break
         }
         dir := rand.Intn(num)
-        if !setCell(*x +  directions[dir].x/2, *y +  directions[dir].y/2, path, update, 0, 0) {
+        if !setCell(*x + directions[dir].x/2, *y + directions[dir].y/2, path, update, 0, 0) {
             continue
         }
-        if !setCell(*x +  directions[dir].x  , *y +  directions[dir].y  , path, update, 0, 0) {
-            setCell(*x +  directions[dir].x/2, *y +  directions[dir].y/2, wall, update, 0, 0)
+        if !setCell(*x + directions[dir].x  , *y + directions[dir].y  , path, update, 0, 0) {
+            setCell(*x + directions[dir].x/2, *y + directions[dir].y/2, wall, update, 0, 0)
             continue
         }
         *x += directions[dir].x
@@ -593,7 +593,7 @@ func followPath(x, y *int) bool {
     lastDir    :=  0
     length     := -1
     setCell(*x, *y, solved, noUpdate, 0, 0)
-    for getInt(&begX)  <= *x && *x <= getInt(&endX) {
+    for getInt(&begX) <= *x && *x <= getInt(&endX) {
         num := findDirections(*x, *y, &length, path, directions)
         if num == 0 {
             break
@@ -725,8 +725,8 @@ func searchBestOpenings(x, y *int) {
         }
     }
     addInt(&sumsolveLength, getInt(&solveLength))
-    if viewFlag {       // only restore delay value if view solve flag is set
-        setInt(&delay, saveDelay)
+    if viewFlag {
+        setInt(&delay, saveDelay)   // only restore delay value if view solve flag is set
     }
     *x = bestStart
     *y = bestFinish
